@@ -25,9 +25,9 @@ public class VotingManager {
     private static final Logger LOGGER = LogUtils.getLogger();
     private static final VotingManager INSTANCE = new VotingManager();
 
-    // Interval between voting rounds (3 minutes)
-    private static final long VOTE_INTERVAL_SECONDS = 180;
-    // How long players have to vote (30 seconds)
+    /** Default interval: 3 minutes. Changed at runtime via /votingmod settime. */
+    private long voteIntervalSeconds = 180;
+    /** How long players have to vote (30 seconds). */
     private static final long VOTE_DURATION_SECONDS = 30;
 
     private ScheduledExecutorService scheduler;
@@ -53,30 +53,73 @@ public class VotingManager {
         return INSTANCE;
     }
 
+    // -------------------------------------------------------------------------
+    // Lifecycle
+    // -------------------------------------------------------------------------
+
     public void start(MinecraftServer server) {
         this.server = server;
         this.eventPool.clear();
         this.eventPool.addAll(VotingEventList.buildEventList());
+        startScheduler();
+        LOGGER.info("[VotingMod] Voting cycle started. First vote in {} sec.", voteIntervalSeconds);
+    }
 
+    public void stop() {
+        shutdownScheduler();
+        voteActive = false;
+        LOGGER.info("[VotingMod] Voting cycle stopped.");
+    }
+
+    // -------------------------------------------------------------------------
+    // Dynamic interval via /votingmod settime
+    // -------------------------------------------------------------------------
+
+    /**
+     * Changes the interval between votes and immediately reschedules.
+     * Safe to call from any thread.
+     */
+    public synchronized void setInterval(long seconds) {
+        this.voteIntervalSeconds = seconds;
+        if (server != null) {
+            shutdownScheduler();
+            startScheduler();
+            LOGGER.info("[VotingMod] Vote interval changed to {} seconds.", seconds);
+        }
+    }
+
+    public long getIntervalSeconds() {
+        return voteIntervalSeconds;
+    }
+
+    // -------------------------------------------------------------------------
+    // Scheduler helpers
+    // -------------------------------------------------------------------------
+
+    private void startScheduler() {
         scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread t = new Thread(r, "VotingMod-Scheduler");
             t.setDaemon(true);
             return t;
         });
-
         scheduler.scheduleAtFixedRate(this::startNewVote,
-                VOTE_INTERVAL_SECONDS, VOTE_INTERVAL_SECONDS, TimeUnit.SECONDS);
-
-        LOGGER.info("[VotingMod] Voting cycle started. First vote in {} seconds.", VOTE_INTERVAL_SECONDS);
+                voteIntervalSeconds, voteIntervalSeconds, TimeUnit.SECONDS);
     }
 
-    public void stop() {
+    private void shutdownScheduler() {
         if (scheduler != null && !scheduler.isShutdown()) {
             scheduler.shutdownNow();
+            try {
+                scheduler.awaitTermination(2, TimeUnit.SECONDS);
+            } catch (InterruptedException ignored) {
+                Thread.currentThread().interrupt();
+            }
         }
-        voteActive = false;
-        LOGGER.info("[VotingMod] Voting cycle stopped.");
     }
+
+    // -------------------------------------------------------------------------
+    // Voting logic
+    // -------------------------------------------------------------------------
 
     private synchronized void startNewVote() {
         if (server == null) return;

@@ -1,17 +1,15 @@
 package com.zahrproject.votingmod.client;
 
-import com.mojang.blaze3d.systems.RenderSystem;
 import com.zahrproject.votingmod.network.ModNetwork;
 import com.zahrproject.votingmod.network.VotePacket;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /**
  * Client-side voting screen.
- * Shown to all players when a new vote starts.
- * Closes automatically after the vote timer expires or when the player votes.
+ * Shows two large MultilineButton widgets so the full option text is always visible.
+ * Closes automatically after the vote timer expires or after showing the result.
  */
 public class VotingScreen extends Screen {
 
@@ -36,17 +34,19 @@ public class VotingScreen extends Screen {
     private long resultShowStartMs = 0;
     private static final long RESULT_DISPLAY_MS = 5000;
 
-    // Button references for highlighting
-    private Button btnA;
-    private Button btnB;
+    // Buttons
+    private MultilineButton btnA;
+    private MultilineButton btnB;
+
+    // Panel layout — computed in init(), used in render()
+    private int panelX, panelY, panelW, panelH;
+    private int btnY, btnW, btnH;
 
     // Colors
-    private static final int COLOR_TITLE = 0xFFFFD700;        // Gold
-    private static final int COLOR_SUBTITLE = 0xFFFFFFFF;     // White
-    private static final int COLOR_TIMER_OK = 0xFF00FF00;     // Green
-    private static final int COLOR_TIMER_LOW = 0xFFFF4444;    // Red
-    private static final int COLOR_WIN = 0xFF00FF00;          // Green winner
-    private static final int COLOR_LOSE = 0xFFFF4444;         // Red loser
+    private static final int COLOR_TITLE     = 0xFFFFD700; // Gold
+    private static final int COLOR_WHITE     = 0xFFFFFFFF;
+    private static final int COLOR_TIMER_OK  = 0xFF00FF00; // Green
+    private static final int COLOR_TIMER_LOW = 0xFFFF4444; // Red
 
     public VotingScreen(String optionA, String optionB, long durationSeconds) {
         super(Component.literal("Голосование"));
@@ -63,193 +63,185 @@ public class VotingScreen extends Screen {
         int centerX = this.width / 2;
         int centerY = this.height / 2;
 
-        int btnWidth = Math.min(200, (this.width / 2) - 20);
-        int btnHeight = 30;
-        int gap = 20;
+        // Panel: max 720px wide, centred horizontally, 210px tall
+        panelW = Math.min(this.width - 40, 720);
+        panelH = 210;
+        panelX = (this.width - panelW) / 2;
+        panelY = centerY - panelH / 2;
 
-        // Option A button (left side)
-        btnA = Button.builder(Component.literal(wrapText(optionA, 24)), btn -> castVote(0))
-                .pos(centerX - btnWidth - gap / 2, centerY + 10)
-                .size(btnWidth, btnHeight)
-                .build();
-        this.addRenderableWidget(btnA);
+        // Buttons: fill panel width minus side margins and a gap between them
+        int sideMargin = 12;
+        int gap        = 10;
+        btnW = (panelW - 2 * sideMargin - gap) / 2;
+        btnH = 85;
+        btnY = panelY + panelH - btnH - 12; // bottom-aligned inside panel
 
-        // Option B button (right side)
-        btnB = Button.builder(Component.literal(wrapText(optionB, 24)), btn -> castVote(1))
-                .pos(centerX + gap / 2, centerY + 10)
-                .size(btnWidth, btnHeight)
-                .build();
-        this.addRenderableWidget(btnB);
+        btnA = new MultilineButton(
+                panelX + sideMargin, btnY, btnW, btnH,
+                optionA, this.font, btn -> castVote(0));
+        addRenderableWidget(btnA);
+
+        btnB = new MultilineButton(
+                panelX + sideMargin + btnW + gap, btnY, btnW, btnH,
+                optionB, this.font, btn -> castVote(1));
+        addRenderableWidget(btnB);
     }
 
     private void castVote(int choice) {
         if (hasVoted || showingResult) return;
         hasVoted = true;
-        myVote = choice;
-
-        // Disable both buttons after voting
+        myVote   = choice;
         btnA.active = false;
         btnB.active = false;
-
-        // Send vote to server
         ModNetwork.CHANNEL.sendToServer(new VotePacket(choice));
     }
 
+    // -------------------------------------------------------------------------
+    // Tick
+    // -------------------------------------------------------------------------
+
     @Override
     public void tick() {
-        long now = System.currentTimeMillis();
+        long now     = System.currentTimeMillis();
         long elapsed = now - openTimeMs;
-        remainingMs = Math.max(0, durationSeconds * 1000L - elapsed);
+        remainingMs  = Math.max(0, durationSeconds * 1000L - elapsed);
 
         if (showingResult) {
-            long resultElapsed = now - resultShowStartMs;
-            if (resultElapsed >= RESULT_DISPLAY_MS) {
-                // Close screen after showing result
-                this.onClose();
+            if (now - resultShowStartMs >= RESULT_DISPLAY_MS) {
+                onClose();
             }
         } else if (remainingMs <= 0 && !hasVoted) {
-            // Timer expired without voting — close
-            this.onClose();
+            onClose();
         }
     }
+
+    // -------------------------------------------------------------------------
+    // Render
+    // -------------------------------------------------------------------------
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        // Background overlay
         renderBackground(graphics);
-        renderVotingPanel(graphics);
+        drawPanel(graphics);
+        if (showingResult) {
+            drawResultContent(graphics);
+        } else {
+            drawVotingHeader(graphics);
+        }
+        // Renders the MultilineButton widgets
         super.render(graphics, mouseX, mouseY, partialTick);
     }
 
-    private void renderVotingPanel(GuiGraphics graphics) {
-        int centerX = this.width / 2;
-        int centerY = this.height / 2;
-
-        // Panel background
-        int panelW = this.width - 60;
-        int panelH = 160;
-        int panelX = 30;
-        int panelY = centerY - 90;
-
-        graphics.fill(panelX, panelY, panelX + panelW, panelY + panelH, 0xCC000000);
-        graphics.fill(panelX, panelY, panelX + panelW, panelY + 2, 0xFFFFD700);
-        graphics.fill(panelX, panelY + panelH - 2, panelX + panelW, panelY + panelH, 0xFFFFD700);
-        graphics.fill(panelX, panelY, panelX + 2, panelY + panelH, 0xFFFFD700);
-        graphics.fill(panelX + panelW - 2, panelY, panelX + panelW, panelY + panelH, 0xFFFFD700);
-
-        if (showingResult) {
-            renderResultPanel(graphics, centerX, centerY);
-        } else {
-            renderVotingContent(graphics, centerX, panelY);
-        }
+    /** Dark panel with gold border. */
+    private void drawPanel(GuiGraphics g) {
+        int x = panelX, y = panelY, w = panelW, h = panelH;
+        g.fill(x, y, x + w, y + h, 0xCC000000);
+        // Gold border (2px)
+        g.fill(x,         y,         x + w,     y + 2,     0xFFFFD700);
+        g.fill(x,         y + h - 2, x + w,     y + h,     0xFFFFD700);
+        g.fill(x,         y,         x + 2,     y + h,     0xFFFFD700);
+        g.fill(x + w - 2, y,         x + w,     y + h,     0xFFFFD700);
     }
 
-    private void renderVotingContent(GuiGraphics graphics, int centerX, int panelY) {
-        // Title
-        String title = "ГОЛОСОВАНИЕ";
-        graphics.drawCenteredString(font, title, centerX, panelY + 10, COLOR_TITLE);
+    /** Header drawn when a vote is active. */
+    private void drawVotingHeader(GuiGraphics g) {
+        int cx = this.width / 2;
 
-        // Separator line text
-        graphics.drawCenteredString(font, "Выберите событие:", centerX, panelY + 28, COLOR_SUBTITLE);
+        // Title
+        g.drawCenteredString(font, "ГОЛОСОВАНИЕ", cx, panelY + 9, COLOR_TITLE);
+
+        // Subtitle
+        g.drawCenteredString(font, "Выберите событие:", cx, panelY + 24, COLOR_WHITE);
 
         // Timer
         long secs = remainingMs / 1000;
         int timerColor = secs > 10 ? COLOR_TIMER_OK : COLOR_TIMER_LOW;
-        String timerText = "Осталось: " + secs + " сек.";
-        graphics.drawCenteredString(font, timerText, centerX, panelY + 44, timerColor);
+        g.drawCenteredString(font, "Осталось: " + secs + " сек.", cx, panelY + 39, timerColor);
 
+        // Option labels above buttons (yellow)
+        int labelY = btnY - 13;
+        int aCenterX = panelX + 12 + btnW / 2;
+        int bCenterX = panelX + 12 + btnW + 10 + btnW / 2;
+        g.drawCenteredString(font, "§eВариант A", aCenterX, labelY, COLOR_WHITE);
+        g.drawCenteredString(font, "§eВариант B", bCenterX, labelY, COLOR_WHITE);
+
+        // Voted message
         if (hasVoted) {
-            String votedMsg = myVote == 0
+            String msg = myVote == 0
                     ? "§aВы проголосовали за вариант A!"
                     : "§aВы проголосовали за вариант B!";
-            graphics.drawCenteredString(font, votedMsg, centerX, panelY + 62, 0xFFFFFFFF);
-            graphics.drawCenteredString(font, "Ожидание результатов...", centerX, panelY + 76, 0xFFAAAAAA);
+            g.drawCenteredString(font, msg,                        cx, panelY + 56, COLOR_WHITE);
+            g.drawCenteredString(font, "Ожидание результатов...", cx, panelY + 69, 0xFFAAAAAA);
         }
-
-        // Option labels above buttons
-        int btnWidth = Math.min(200, (this.width / 2) - 20);
-        int gap = 20;
-        int btnY = (this.height / 2) + 10;
-
-        // Option A label
-        graphics.drawCenteredString(font, "§eВариант A:", centerX - btnWidth / 2 - gap / 2, btnY - 14, 0xFFFFFFFF);
-        // Option B label
-        graphics.drawCenteredString(font, "§eВариант B:", centerX + btnWidth / 2 + gap / 2, btnY - 14, 0xFFFFFFFF);
     }
 
-    private void renderResultPanel(GuiGraphics graphics, int centerX, int centerY) {
-        int panelY = centerY - 90;
+    /** Content drawn while showing the vote result. */
+    private void drawResultContent(GuiGraphics g) {
+        int cx = this.width / 2;
 
-        graphics.drawCenteredString(font, "§6РЕЗУЛЬТАТЫ ГОЛОСОВАНИЯ", centerX, panelY + 10, COLOR_TITLE);
+        g.drawCenteredString(font, "§6РЕЗУЛЬТАТЫ ГОЛОСОВАНИЯ", cx, panelY + 9,  COLOR_TITLE);
+        g.drawCenteredString(font,
+                "§fПобедил вариант: §a" + (resultWinner == 0 ? "A" : "B"),
+                cx, panelY + 26, COLOR_WHITE);
 
-        // Winner announcement
-        graphics.drawCenteredString(font, "§fПобедил вариант: §a" + (resultWinner == 0 ? "A" : "B"),
-                centerX, panelY + 30, 0xFFFFFFFF);
+        // Winning text (truncated if too wide to fit)
+        String displayText = resultText.length() > 60
+                ? resultText.substring(0, 57) + "..."
+                : resultText;
+        g.drawCenteredString(font, "§e" + displayText, cx, panelY + 42, 0xFFFFFF00);
 
-        // Winning action text
-        graphics.drawCenteredString(font, "§e" + resultText, centerX, panelY + 46, 0xFFFFFF00);
+        // Vote count labels
+        int aCenterX = panelX + 12 + btnW / 2;
+        int bCenterX = panelX + 12 + btnW + 10 + btnW / 2;
+        String aLabel = (resultWinner == 0 ? "§a" : "§c") + "A: " + resultVotesA + " гол.";
+        String bLabel = (resultWinner == 1 ? "§a" : "§c") + "B: " + resultVotesB + " гол.";
+        g.drawCenteredString(font, aLabel, aCenterX, panelY + 62, COLOR_WHITE);
+        g.drawCenteredString(font, bLabel, bCenterX, panelY + 62, COLOR_WHITE);
 
-        // Vote counts
-        String optALabel = (resultWinner == 0 ? "§a" : "§c") + "Вариант A: " + resultVotesA + " гол.";
-        String optBLabel = (resultWinner == 1 ? "§a" : "§c") + "Вариант B: " + resultVotesB + " гол.";
-        graphics.drawCenteredString(font, optALabel, centerX - 80, panelY + 68, 0xFFFFFFFF);
-        graphics.drawCenteredString(font, optBLabel, centerX + 80, panelY + 68, 0xFFFFFFFF);
-
-        // Progress bar for votes
+        // Progress bar
         int totalVotes = resultVotesA + resultVotesB;
         if (totalVotes > 0) {
-            int barW = 260;
-            int barH = 10;
-            int barX = centerX - barW / 2;
-            int barY = panelY + 82;
+            int barW  = panelW - 40;
+            int barH  = 12;
+            int barX  = panelX + 20;
+            int barY  = panelY + 78;
+            int aFill = (int) ((float) resultVotesA / totalVotes * barW);
 
-            int aWidth = (int) ((float) resultVotesA / totalVotes * barW);
-
-            graphics.fill(barX, barY, barX + barW, barY + barH, 0xFF444444);
-            if (aWidth > 0) graphics.fill(barX, barY, barX + aWidth, barY + barH, 0xFF00CC00);
-            if (aWidth < barW) graphics.fill(barX + aWidth, barY, barX + barW, barY + barH, 0xFFCC0000);
-            graphics.fill(barX, barY, barX + barW, barY + 1, 0xFFFFFFFF);
-            graphics.fill(barX, barY + barH - 1, barX + barW, barY + barH, 0xFFFFFFFF);
+            g.fill(barX,          barY, barX + barW, barY + barH, 0xFF333333);
+            if (aFill > 0)        g.fill(barX,          barY, barX + aFill,  barY + barH, 0xFF00BB00);
+            if (aFill < barW)     g.fill(barX + aFill,  barY, barX + barW,   barY + barH, 0xFFBB0000);
+            // border
+            g.fill(barX, barY,            barX + barW, barY + 1,      0xFFFFFFFF);
+            g.fill(barX, barY + barH - 1, barX + barW, barY + barH,   0xFFFFFFFF);
         }
+
+        // "Winning" result buttons (disabled, highlighted by winner color)
+        if (btnA != null) btnA.active = false;
+        if (btnB != null) btnB.active = false;
 
         // Closing countdown
         long closeIn = Math.max(0, RESULT_DISPLAY_MS - (System.currentTimeMillis() - resultShowStartMs));
-        graphics.drawCenteredString(font, "§7Закрытие через " + (closeIn / 1000 + 1) + " сек...",
-                centerX, panelY + 100, 0xFFAAAAAA);
+        g.drawCenteredString(font,
+                "§7Закрытие через " + (closeIn / 1000 + 1) + " сек...",
+                cx, panelY + panelH - 18, 0xFFAAAAAA);
     }
 
-    /**
-     * Called by VoteResultPacket handler to display the result.
-     */
-    public void showResult(int winner, String winnerText, int votesA, int votesB) {
-        this.showingResult = true;
-        this.resultWinner = winner;
-        this.resultText = winnerText;
-        this.resultVotesA = votesA;
-        this.resultVotesB = votesB;
-        this.resultShowStartMs = System.currentTimeMillis();
+    // -------------------------------------------------------------------------
+    // Public API
+    // -------------------------------------------------------------------------
 
-        // Disable vote buttons
+    /** Called by VoteResultPacket handler to display the result. */
+    public void showResult(int winner, String winnerText, int votesA, int votesB) {
+        this.showingResult    = true;
+        this.resultWinner     = winner;
+        this.resultText       = winnerText;
+        this.resultVotesA     = votesA;
+        this.resultVotesB     = votesB;
+        this.resultShowStartMs = System.currentTimeMillis();
         if (btnA != null) btnA.active = false;
         if (btnB != null) btnB.active = false;
     }
 
-    @Override
-    public boolean isPauseScreen() {
-        return false;
-    }
-
-    @Override
-    public boolean shouldCloseOnEsc() {
-        return false;
-    }
-
-    /**
-     * Wraps text to a given max length (rough word wrap for button labels).
-     */
-    private String wrapText(String text, int maxLineLength) {
-        if (text.length() <= maxLineLength) return text;
-        // Just truncate with ellipsis for button labels (full text shown in tooltip)
-        return text.substring(0, maxLineLength - 3) + "...";
-    }
+    @Override public boolean isPauseScreen()    { return false; }
+    @Override public boolean shouldCloseOnEsc() { return false; }
 }

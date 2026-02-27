@@ -1,9 +1,11 @@
 package com.zahrproject.votingmod;
 
 import com.mojang.logging.LogUtils;
+import com.zahrproject.votingmod.command.VotingCommand;
 import com.zahrproject.votingmod.handler.ForgeEventHandler;
 import com.zahrproject.votingmod.network.ModNetwork;
 import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.event.server.ServerStartingEvent;
 import net.minecraftforge.event.server.ServerStoppingEvent;
 import net.minecraftforge.eventbus.api.IEventBus;
@@ -36,6 +38,12 @@ public class VotingMod {
 
     private void clientSetup(final FMLClientSetupEvent event) {
         LOGGER.info("[VotingMod] Client setup complete.");
+    }
+
+    @SubscribeEvent
+    public void onRegisterCommands(RegisterCommandsEvent event) {
+        VotingCommand.register(event.getDispatcher());
+        LOGGER.info("[VotingMod] Commands registered.");
     }
 
     @SubscribeEvent
