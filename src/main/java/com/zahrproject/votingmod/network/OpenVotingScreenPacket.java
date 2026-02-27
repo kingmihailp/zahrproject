@@ -9,38 +9,34 @@ import java.util.function.Supplier;
 
 /**
  * Server → Client packet.
- * Tells the client to open the voting screen with the given options.
+ * Tells the client to open the voting screen for a single event.
+ * Players will vote YES or NO on whether this event should happen.
  */
 public class OpenVotingScreenPacket {
 
-    private final String optionA;
-    private final String optionB;
+    private final String eventDescription;
     private final long durationSeconds;
 
-    public OpenVotingScreenPacket(String optionA, String optionB, long durationSeconds) {
-        this.optionA = optionA;
-        this.optionB = optionB;
-        this.durationSeconds = durationSeconds;
+    public OpenVotingScreenPacket(String eventDescription, long durationSeconds) {
+        this.eventDescription = eventDescription;
+        this.durationSeconds  = durationSeconds;
     }
 
     public static void encode(OpenVotingScreenPacket packet, FriendlyByteBuf buf) {
-        buf.writeUtf(packet.optionA, 512);
-        buf.writeUtf(packet.optionB, 512);
+        buf.writeUtf(packet.eventDescription, 512);
         buf.writeLong(packet.durationSeconds);
     }
 
     public static OpenVotingScreenPacket decode(FriendlyByteBuf buf) {
-        String a = buf.readUtf(512);
-        String b = buf.readUtf(512);
-        long dur = buf.readLong();
-        return new OpenVotingScreenPacket(a, b, dur);
+        String desc = buf.readUtf(512);
+        long dur    = buf.readLong();
+        return new OpenVotingScreenPacket(desc, dur);
     }
 
     public static void handle(OpenVotingScreenPacket packet, Supplier<NetworkEvent.Context> ctx) {
         ctx.get().enqueueWork(() -> {
-            // This runs on the client main thread
             Minecraft mc = Minecraft.getInstance();
-            mc.setScreen(new VotingScreen(packet.optionA, packet.optionB, packet.durationSeconds));
+            mc.setScreen(new VotingScreen(packet.eventDescription, packet.durationSeconds));
         });
         ctx.get().setPacketHandled(true);
     }

@@ -9,42 +9,39 @@ import java.util.function.Supplier;
 
 /**
  * Server → Client packet.
- * Tells the client which option won and the vote counts.
+ * Tells the client whether YES or NO won and the vote counts.
+ * The VotingScreen already knows the event description, so it is not repeated here.
  */
 public class VoteResultPacket {
 
-    private final int winnerOption; // 0 = A, 1 = B
-    private final String winnerText;
-    private final int votesA;
-    private final int votesB;
+    private final boolean yesWon;
+    private final int yesCount;
+    private final int noCount;
 
-    public VoteResultPacket(int winnerOption, String winnerText, int votesA, int votesB) {
-        this.winnerOption = winnerOption;
-        this.winnerText = winnerText;
-        this.votesA = votesA;
-        this.votesB = votesB;
+    public VoteResultPacket(boolean yesWon, int yesCount, int noCount) {
+        this.yesWon   = yesWon;
+        this.yesCount = yesCount;
+        this.noCount  = noCount;
     }
 
     public static void encode(VoteResultPacket packet, FriendlyByteBuf buf) {
-        buf.writeInt(packet.winnerOption);
-        buf.writeUtf(packet.winnerText, 512);
-        buf.writeInt(packet.votesA);
-        buf.writeInt(packet.votesB);
+        buf.writeBoolean(packet.yesWon);
+        buf.writeInt(packet.yesCount);
+        buf.writeInt(packet.noCount);
     }
 
     public static VoteResultPacket decode(FriendlyByteBuf buf) {
-        int winner = buf.readInt();
-        String text = buf.readUtf(512);
-        int a = buf.readInt();
-        int b = buf.readInt();
-        return new VoteResultPacket(winner, text, a, b);
+        boolean yesWon   = buf.readBoolean();
+        int     yesCount = buf.readInt();
+        int     noCount  = buf.readInt();
+        return new VoteResultPacket(yesWon, yesCount, noCount);
     }
 
     public static void handle(VoteResultPacket packet, Supplier<NetworkEvent.Context> ctx) {
         ctx.get().enqueueWork(() -> {
             Minecraft mc = Minecraft.getInstance();
             if (mc.screen instanceof VotingScreen votingScreen) {
-                votingScreen.showResult(packet.winnerOption, packet.winnerText, packet.votesA, packet.votesB);
+                votingScreen.showResult(packet.yesWon, packet.yesCount, packet.noCount);
             }
         });
         ctx.get().setPacketHandled(true);

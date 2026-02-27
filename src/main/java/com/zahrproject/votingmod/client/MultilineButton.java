@@ -1,7 +1,5 @@
 package com.zahrproject.votingmod.client;
 
-import com.mojang.blaze3d.systems.RenderSystem;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
@@ -12,70 +10,79 @@ import java.util.List;
 
 /**
  * A Button that renders word-wrapped text inside itself,
- * so long option descriptions are fully visible.
+ * so long event descriptions are always fully visible.
+ *
+ * Supports a custom accent color for YES (green) / NO (red) styling.
+ * Default accent is blue.
  */
 public class MultilineButton extends Button {
+
+    /** Preset accent colors. */
+    public static final int ACCENT_BLUE  = 0x2288DD;
+    public static final int ACCENT_GREEN = 0x22BB44;
+    public static final int ACCENT_RED   = 0xCC2233;
 
     private final List<String> wrappedLines;
     private final Font font;
 
+    // Derived colors (pre-computed in constructor)
+    private final int bgNormal;
+    private final int bgHover;
+    private final int borderNormal;
+    private final int borderHover;
+
+    /** Blue accent (default). */
     public MultilineButton(int x, int y, int width, int height,
                            String text, Font font, OnPress onPress) {
-        super(x, y, width, height, Component.literal(text), onPress,
-                supplier -> supplier.get());
+        this(x, y, width, height, text, font, ACCENT_BLUE, onPress);
+    }
+
+    /** Custom accent color (pass one of the ACCENT_* constants or your own RGB). */
+    public MultilineButton(int x, int y, int width, int height,
+                           String text, Font font, int accentRgb, OnPress onPress) {
+        super(x, y, width, height, Component.literal(text), onPress, supplier -> supplier.get());
         this.font = font;
         this.wrappedLines = wordWrap(text, width - 14);
+
+        this.borderNormal = 0xFF000000 | accentRgb;
+        this.borderHover  = 0xFF000000 | lighten(accentRgb, 1.55f);
+        this.bgNormal     = buildBg(accentRgb, 0xCC, 0.18f);
+        this.bgHover      = buildBg(accentRgb, 0xDD, 0.28f);
     }
 
     @Override
     public void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        int x = getX();
-        int y = getY();
-        int w = getWidth();
-        int h = getHeight();
+        int x = getX(), y = getY(), w = getWidth(), h = getHeight();
 
-        // Background color based on state
-        int bgColor;
-        int borderColor;
-        if (!active) {
-            bgColor   = 0xAA2A2A2A;
-            borderColor = 0xFF555555;
-        } else if (isHovered) {
-            bgColor   = 0xDD1A5EA0;
-            borderColor = 0xFF55CCFF;
-        } else {
-            bgColor   = 0xCC0D3D72;
-            borderColor = 0xFF2288DD;
-        }
+        int bg     = !active ? 0xAA2A2A2A : (isHovered ? bgHover     : bgNormal);
+        int border = !active ? 0xFF555555  : (isHovered ? borderHover : borderNormal);
 
-        // Fill background
-        graphics.fill(x, y, x + w, y + h, bgColor);
-        // Border top/bottom/left/right (2px)
-        graphics.fill(x,         y,         x + w,     y + 2,     borderColor);
-        graphics.fill(x,         y + h - 2, x + w,     y + h,     borderColor);
-        graphics.fill(x,         y,         x + 2,     y + h,     borderColor);
-        graphics.fill(x + w - 2, y,         x + w,     y + h,     borderColor);
+        // Background
+        graphics.fill(x, y, x + w, y + h, bg);
+        // Border (2px)
+        graphics.fill(x,         y,         x + w,     y + 2,     border);
+        graphics.fill(x,         y + h - 2, x + w,     y + h,     border);
+        graphics.fill(x,         y,         x + 2,     y + h,     border);
+        graphics.fill(x + w - 2, y,         x + w,     y + h,     border);
 
-        // Draw wrapped text lines centered vertically and horizontally
-        int lineH = font.lineHeight + 3;
-        int totalTextH = wrappedLines.size() * lineH - 3;
-        int textStartY = y + (h - totalTextH) / 2;
-        int textColor = active ? 0xFFFFFFFF : 0xFF777777;
+        // Wrapped text, centered vertically
+        int lineH       = font.lineHeight + 3;
+        int totalTextH  = wrappedLines.size() * lineH - 3;
+        int textY       = y + (h - totalTextH) / 2;
+        int textColor   = active ? 0xFFFFFFFF : 0xFF777777;
 
         for (String line : wrappedLines) {
-            graphics.drawCenteredString(font, line, x + w / 2, textStartY, textColor);
-            textStartY += lineH;
+            graphics.drawCenteredString(font, line, x + w / 2, textY, textColor);
+            textY += lineH;
         }
     }
 
-    /**
-     * Word-wraps text so each line fits within maxPixelWidth pixels.
-     */
+    // ── Helpers ────────────────────────────────────────────────────────────────
+
     private List<String> wordWrap(String text, int maxPixelWidth) {
         List<String> result = new ArrayList<>();
         String[] words = text.split("\\s+");
         StringBuilder current = new StringBuilder();
-
         for (String word : words) {
             if (current.length() == 0) {
                 current.append(word);
@@ -91,5 +98,21 @@ public class MultilineButton extends Button {
         }
         if (current.length() > 0) result.add(current.toString());
         return result.isEmpty() ? List.of(text) : result;
+    }
+
+    /** Returns an ARGB color using alpha + darkened RGB. */
+    private static int buildBg(int rgb, int alpha, float brightness) {
+        int r = (int)(((rgb >> 16) & 0xFF) * brightness);
+        int g = (int)(((rgb >> 8)  & 0xFF) * brightness);
+        int b = (int)( (rgb        & 0xFF) * brightness);
+        return (alpha << 24) | (r << 16) | (g << 8) | b;
+    }
+
+    /** Brightens RGB channels by the given factor (clamps to 255). */
+    private static int lighten(int rgb, float factor) {
+        int r = Math.min(255, (int)(((rgb >> 16) & 0xFF) * factor));
+        int g = Math.min(255, (int)(((rgb >> 8)  & 0xFF) * factor));
+        int b = Math.min(255, (int)( (rgb        & 0xFF) * factor));
+        return (r << 16) | (g << 8) | b;
     }
 }

@@ -6,6 +6,7 @@ import com.zahrproject.votingmod.events.VotingEventList;
 import com.zahrproject.votingmod.network.ModNetwork;
 import com.zahrproject.votingmod.network.OpenVotingScreenPacket;
 import com.zahrproject.votingmod.network.VoteResultPacket;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.network.PacketDistributor;
@@ -17,8 +18,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Manages the voting cycle on the server side.
- * Every 3 minutes, picks a random event and sends it to all players.
- * After 30 seconds (or when all players voted), tallies votes and executes the winning action.
+ * Picks a random event, sends it to all players, and waits for YES/NO votes.
+ * If YES wins the event is executed; if NO wins the event is cancelled.
  */
 public class VotingManager {
 
@@ -39,8 +40,9 @@ public class VotingManager {
     private VotingEvent currentEvent = null;
     private int currentEventIndex = -1;
     private final Map<UUID, Integer> playerVotes = new ConcurrentHashMap<>();
-    private final AtomicInteger votesA = new AtomicInteger(0);
-    private final AtomicInteger votesB = new AtomicInteger(0);
+    /** 0 = YES, 1 = NO */
+    private final AtomicInteger votesYes = new AtomicInteger(0);
+    private final AtomicInteger votesNo  = new AtomicInteger(0);
     private boolean voteActive = false;
     private ScheduledFuture<?> voteEndFuture;
 
@@ -136,17 +138,15 @@ public class VotingManager {
         currentEventIndex = index;
 
         playerVotes.clear();
-        votesA.set(0);
-        votesB.set(0);
+        votesYes.set(0);
+        votesNo.set(0);
         voteActive = true;
 
-        LOGGER.info("[VotingMod] Starting vote: '{}' vs '{}'",
-                currentEvent.getOptionA(), currentEvent.getOptionB());
+        LOGGER.info("[VotingMod] Starting vote: '{}'", currentEvent.getDescription());
 
         // Send packet to all players to open voting screen
         OpenVotingScreenPacket packet = new OpenVotingScreenPacket(
-                currentEvent.getOptionA(),
-                currentEvent.getOptionB(),
+                currentEvent.getDescription(),
                 VOTE_DURATION_SECONDS
         );
 
@@ -163,13 +163,10 @@ public class VotingManager {
         if (playerVotes.containsKey(playerId)) return; // Already voted
 
         playerVotes.put(playerId, option);
-        if (option == 0) {
-            votesA.incrementAndGet();
-        } else {
-            votesB.incrementAndGet();
-        }
+        if (option == 0) votesYes.incrementAndGet();
+        else             votesNo.incrementAndGet();
 
-        LOGGER.debug("[VotingMod] Player {} voted for option {}", playerId, option);
+        LOGGER.debug("[VotingMod] Player {} voted {} ", playerId, option == 0 ? "YES" : "NO");
 
         // Check if all online players have voted
         int totalPlayers = server.getPlayerList().getPlayers().size();
@@ -185,37 +182,34 @@ public class VotingManager {
         if (!voteActive) return;
         voteActive = false;
 
-        int countA = votesA.get();
-        int countB = votesB.get();
+        int yesCount = votesYes.get();
+        int noCount  = votesNo.get();
 
-        LOGGER.info("[VotingMod] Vote ended. Option A: {} votes, Option B: {} votes", countA, countB);
+        // Ties go to YES
+        boolean yesWins = yesCount >= noCount;
 
-        // Determine winner (ties go to option A)
-        boolean aWins = countA >= countB;
-        String winnerText = aWins ? currentEvent.getOptionA() : currentEvent.getOptionB();
+        LOGGER.info("[VotingMod] Vote ended. YES={} NO={} → {}",
+                yesCount, noCount, yesWins ? "HAPPENS" : "CANCELLED");
 
         // Send result packet to all players
-        VoteResultPacket resultPacket = new VoteResultPacket(
-                aWins ? 0 : 1,
-                winnerText,
-                countA,
-                countB
-        );
-
+        VoteResultPacket resultPacket = new VoteResultPacket(yesWins, yesCount, noCount);
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), resultPacket);
         }
 
-        // Execute winning action on main server thread
-        VotingEvent eventToExecute = currentEvent;
-        boolean finalAWins = aWins;
-        server.execute(() -> {
-            if (finalAWins) {
-                eventToExecute.executeA(server);
-            } else {
-                eventToExecute.executeB(server);
-            }
-        });
+        // Chat broadcast
+        String desc = currentEvent.getDescription();
+        String chatMsg = yesWins
+                ? "§a✔ Событие произошло: §e" + desc
+                : "§c✘ Событие отменено голосованием: §7" + desc;
+        server.getPlayerList().broadcastSystemMessage(
+                Component.literal("§6[Голосование] " + chatMsg), false);
+
+        // Execute event on main server thread (only if YES won)
+        if (yesWins) {
+            VotingEvent eventToExecute = currentEvent;
+            server.execute(() -> eventToExecute.execute(server));
+        }
 
         currentEvent = null;
         currentEventIndex = -1;
