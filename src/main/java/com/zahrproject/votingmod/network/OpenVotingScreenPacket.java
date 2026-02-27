@@ -1,0 +1,47 @@
+package com.zahrproject.votingmod.network;
+
+import com.zahrproject.votingmod.client.VotingScreen;
+import net.minecraft.client.Minecraft;
+import net.minecraft.network.FriendlyByteBuf;
+import net.minecraftforge.network.NetworkEvent;
+
+import java.util.function.Supplier;
+
+/**
+ * Server → Client packet.
+ * Tells the client to open the voting screen with the given options.
+ */
+public class OpenVotingScreenPacket {
+
+    private final String optionA;
+    private final String optionB;
+    private final long durationSeconds;
+
+    public OpenVotingScreenPacket(String optionA, String optionB, long durationSeconds) {
+        this.optionA = optionA;
+        this.optionB = optionB;
+        this.durationSeconds = durationSeconds;
+    }
+
+    public static void encode(OpenVotingScreenPacket packet, FriendlyByteBuf buf) {
+        buf.writeUtf(packet.optionA, 512);
+        buf.writeUtf(packet.optionB, 512);
+        buf.writeLong(packet.durationSeconds);
+    }
+
+    public static OpenVotingScreenPacket decode(FriendlyByteBuf buf) {
+        String a = buf.readUtf(512);
+        String b = buf.readUtf(512);
+        long dur = buf.readLong();
+        return new OpenVotingScreenPacket(a, b, dur);
+    }
+
+    public static void handle(OpenVotingScreenPacket packet, Supplier<NetworkEvent.Context> ctx) {
+        ctx.get().enqueueWork(() -> {
+            // This runs on the client main thread
+            Minecraft mc = Minecraft.getInstance();
+            mc.setScreen(new VotingScreen(packet.optionA, packet.optionB, packet.durationSeconds));
+        });
+        ctx.get().setPacketHandled(true);
+    }
+}

@@ -1,0 +1,213 @@
+package com.zahrproject.votingmod;
+
+import com.mojang.logging.LogUtils;
+import com.zahrproject.votingmod.events.VotingEvent;
+import com.zahrproject.votingmod.events.VotingEventList;
+import com.zahrproject.votingmod.network.ModNetwork;
+import com.zahrproject.votingmod.network.OpenVotingScreenPacket;
+import com.zahrproject.votingmod.network.VoteResultPacket;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraftforge.network.PacketDistributor;
+import org.slf4j.Logger;
+
+import java.util.*;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
+
+/**
+ * Manages the voting cycle on the server side.
+ * Every 3 minutes, picks a random event and sends it to all players.
+ * After 30 seconds (or when all players voted), tallies votes and executes the winning action.
+ */
+public class VotingManager {
+
+    private static final Logger LOGGER = LogUtils.getLogger();
+    private static final VotingManager INSTANCE = new VotingManager();
+
+    // Interval between voting rounds (3 minutes)
+    private static final long VOTE_INTERVAL_SECONDS = 180;
+    // How long players have to vote (30 seconds)
+    private static final long VOTE_DURATION_SECONDS = 30;
+
+    private ScheduledExecutorService scheduler;
+    private MinecraftServer server;
+
+    private final List<VotingEvent> eventPool = new ArrayList<>();
+
+    // Current voting state
+    private VotingEvent currentEvent = null;
+    private int currentEventIndex = -1;
+    private final Map<UUID, Integer> playerVotes = new ConcurrentHashMap<>();
+    private final AtomicInteger votesA = new AtomicInteger(0);
+    private final AtomicInteger votesB = new AtomicInteger(0);
+    private boolean voteActive = false;
+    private ScheduledFuture<?> voteEndFuture;
+
+    // Tracks which events were used recently (to avoid repeats)
+    private final List<Integer> recentEventIndices = new ArrayList<>();
+
+    private VotingManager() {}
+
+    public static VotingManager getInstance() {
+        return INSTANCE;
+    }
+
+    public void start(MinecraftServer server) {
+        this.server = server;
+        this.eventPool.clear();
+        this.eventPool.addAll(VotingEventList.buildEventList());
+
+        scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "VotingMod-Scheduler");
+            t.setDaemon(true);
+            return t;
+        });
+
+        scheduler.scheduleAtFixedRate(this::startNewVote,
+                VOTE_INTERVAL_SECONDS, VOTE_INTERVAL_SECONDS, TimeUnit.SECONDS);
+
+        LOGGER.info("[VotingMod] Voting cycle started. First vote in {} seconds.", VOTE_INTERVAL_SECONDS);
+    }
+
+    public void stop() {
+        if (scheduler != null && !scheduler.isShutdown()) {
+            scheduler.shutdownNow();
+        }
+        voteActive = false;
+        LOGGER.info("[VotingMod] Voting cycle stopped.");
+    }
+
+    private synchronized void startNewVote() {
+        if (server == null) return;
+
+        List<ServerPlayer> players = server.getPlayerList().getPlayers();
+        if (players.isEmpty()) {
+            LOGGER.info("[VotingMod] No players online, skipping vote.");
+            return;
+        }
+
+        // Pick a random event (avoiding recent ones if possible)
+        int index = pickRandomEventIndex();
+        currentEvent = eventPool.get(index);
+        currentEventIndex = index;
+
+        playerVotes.clear();
+        votesA.set(0);
+        votesB.set(0);
+        voteActive = true;
+
+        LOGGER.info("[VotingMod] Starting vote: '{}' vs '{}'",
+                currentEvent.getOptionA(), currentEvent.getOptionB());
+
+        // Send packet to all players to open voting screen
+        OpenVotingScreenPacket packet = new OpenVotingScreenPacket(
+                currentEvent.getOptionA(),
+                currentEvent.getOptionB(),
+                VOTE_DURATION_SECONDS
+        );
+
+        for (ServerPlayer player : players) {
+            ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), packet);
+        }
+
+        // Schedule vote end
+        voteEndFuture = scheduler.schedule(this::endVote, VOTE_DURATION_SECONDS, TimeUnit.SECONDS);
+    }
+
+    public synchronized void receiveVote(UUID playerId, int option) {
+        if (!voteActive) return;
+        if (playerVotes.containsKey(playerId)) return; // Already voted
+
+        playerVotes.put(playerId, option);
+        if (option == 0) {
+            votesA.incrementAndGet();
+        } else {
+            votesB.incrementAndGet();
+        }
+
+        LOGGER.debug("[VotingMod] Player {} voted for option {}", playerId, option);
+
+        // Check if all online players have voted
+        int totalPlayers = server.getPlayerList().getPlayers().size();
+        if (playerVotes.size() >= totalPlayers) {
+            if (voteEndFuture != null && !voteEndFuture.isDone()) {
+                voteEndFuture.cancel(false);
+            }
+            endVote();
+        }
+    }
+
+    private synchronized void endVote() {
+        if (!voteActive) return;
+        voteActive = false;
+
+        int countA = votesA.get();
+        int countB = votesB.get();
+
+        LOGGER.info("[VotingMod] Vote ended. Option A: {} votes, Option B: {} votes", countA, countB);
+
+        // Determine winner (ties go to option A)
+        boolean aWins = countA >= countB;
+        String winnerText = aWins ? currentEvent.getOptionA() : currentEvent.getOptionB();
+
+        // Send result packet to all players
+        VoteResultPacket resultPacket = new VoteResultPacket(
+                aWins ? 0 : 1,
+                winnerText,
+                countA,
+                countB
+        );
+
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), resultPacket);
+        }
+
+        // Execute winning action on main server thread
+        VotingEvent eventToExecute = currentEvent;
+        boolean finalAWins = aWins;
+        server.execute(() -> {
+            if (finalAWins) {
+                eventToExecute.executeA(server);
+            } else {
+                eventToExecute.executeB(server);
+            }
+        });
+
+        currentEvent = null;
+        currentEventIndex = -1;
+    }
+
+    private int pickRandomEventIndex() {
+        if (eventPool.size() == 1) return 0;
+
+        // Build candidate list excluding recent events
+        List<Integer> candidates = new ArrayList<>();
+        for (int i = 0; i < eventPool.size(); i++) {
+            if (!recentEventIndices.contains(i)) {
+                candidates.add(i);
+            }
+        }
+
+        // If all events were recent, reset and use full pool
+        if (candidates.isEmpty()) {
+            recentEventIndices.clear();
+            for (int i = 0; i < eventPool.size(); i++) {
+                candidates.add(i);
+            }
+        }
+
+        int chosen = candidates.get((int) (Math.random() * candidates.size()));
+        recentEventIndices.add(chosen);
+        // Keep only the last N used indices in memory
+        int maxRecent = Math.max(1, eventPool.size() / 2);
+        while (recentEventIndices.size() > maxRecent) {
+            recentEventIndices.remove(0);
+        }
+        return chosen;
+    }
+
+    public boolean isVoteActive() {
+        return voteActive;
+    }
+}
