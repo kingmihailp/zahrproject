@@ -1,9 +1,14 @@
 package com.zahrproject.votingmod.events;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.level.levelgen.Heightmap;
+import net.minecraft.world.level.levelgen.structure.Structure;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -358,6 +363,16 @@ public class VotingEventList {
                 }
         ));
 
+        events.add(new VotingEvent(
+                "Убить всех игроков",
+                server -> {
+                    for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                        player.kill();
+                    }
+                    broadcast(server, "Все игроки мертвы. Ничего личного.");
+                }
+        ));
+
         // ── Items ──────────────────────────────────────────────────────────────
 
         events.add(new VotingEvent(
@@ -467,6 +482,37 @@ public class VotingEventList {
                         }
                     }
                     broadcast(server, "Рядом с каждым игроком появился сундук с сокровищами!");
+                }
+        ));
+
+        // ── Special: random structure ──────────────────────────────────────────
+
+        events.add(new VotingEvent(
+                "Заспавнить случайную структуру рядом с игроком",
+                server -> {
+                    Registry<Structure> structureRegistry =
+                            server.registryAccess().registryOrThrow(Registries.STRUCTURE);
+                    List<ResourceKey<Structure>> keys = new ArrayList<>(structureRegistry.registryKeySet());
+                    if (keys.isEmpty()) return;
+
+                    ResourceKey<Structure> chosen = keys.get(RANDOM.nextInt(keys.size()));
+                    String structureId = chosen.location().toString();
+
+                    for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                        ServerLevel level = player.serverLevel();
+                        BlockPos pos = player.blockPosition();
+                        int ox = RANDOM.nextInt(81) - 40; // ±40 блоков
+                        int oz = RANDOM.nextInt(81) - 40;
+                        int tx = pos.getX() + ox;
+                        int tz = pos.getZ() + oz;
+                        int ty = level.getHeight(Heightmap.Types.WORLD_SURFACE, tx, tz);
+
+                        server.getCommands().performPrefixedCommand(
+                                server.createCommandSourceStack(),
+                                "place structure " + structureId + " " + tx + " " + ty + " " + tz
+                        );
+                    }
+                    broadcast(server, "Структура \"" + chosen.location().getPath() + "\" появилась неподалёку!");
                 }
         ));
 
