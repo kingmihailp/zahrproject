@@ -11,6 +11,7 @@ import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LightningBolt;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.MobCategory;
@@ -79,6 +80,71 @@ public class VotingEventList {
                         }
                     }
                     broadcast(server, "Вокруг игроков появились зомби!");
+                }
+        ));
+
+        events.add(new VotingEvent(
+                "Зомби-апокалипсис: нашествие зомби со всех сторон",
+                server -> {
+                    for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                        ServerLevel level = player.serverLevel();
+                        BlockPos pos = player.blockPosition();
+                        for (int i = 0; i < 25; i++) {
+                            Zombie zombie = new Zombie(EntityType.ZOMBIE, level);
+                            double ox = (RANDOM.nextDouble() - 0.5) * 30; // ±15 блоков
+                            double oz = (RANDOM.nextDouble() - 0.5) * 30;
+                            zombie.moveTo(pos.getX() + ox, pos.getY(), pos.getZ() + oz, 0, 0);
+                            zombie.finalizeSpawn(level, level.getCurrentDifficultyAt(pos),
+                                    MobSpawnType.EVENT, null, null);
+                            level.addFreshEntity(zombie);
+                        }
+                    }
+                    broadcast(server, "ЗОМБИ-АПОКАЛИПСИС! Их слишком много!");
+                }
+        ));
+
+        events.add(new VotingEvent(
+                "Призвать бронированного зомби с рандомным снаряжением",
+                server -> {
+                    // Пулы предметов для случайного снаряжения
+                    Item[] helmets   = { Items.LEATHER_HELMET,    Items.IRON_HELMET,
+                                         Items.GOLDEN_HELMET,    Items.DIAMOND_HELMET    };
+                    Item[] chests    = { Items.LEATHER_CHESTPLATE, Items.IRON_CHESTPLATE,
+                                         Items.GOLDEN_CHESTPLATE, Items.DIAMOND_CHESTPLATE };
+                    Item[] legs      = { Items.LEATHER_LEGGINGS,  Items.IRON_LEGGINGS,
+                                         Items.GOLDEN_LEGGINGS,  Items.DIAMOND_LEGGINGS  };
+                    Item[] boots     = { Items.LEATHER_BOOTS,     Items.IRON_BOOTS,
+                                         Items.GOLDEN_BOOTS,     Items.DIAMOND_BOOTS     };
+                    Item[] weapons   = { Items.WOODEN_SWORD, Items.STONE_SWORD,
+                                         Items.IRON_SWORD,   Items.GOLDEN_SWORD,
+                                         Items.DIAMOND_SWORD, Items.IRON_AXE,
+                                         Items.DIAMOND_AXE                               };
+
+                    for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                        ServerLevel level = player.serverLevel();
+                        BlockPos pos = player.blockPosition();
+                        double ox = (RANDOM.nextDouble() - 0.5) * 6;
+                        double oz = (RANDOM.nextDouble() - 0.5) * 6;
+
+                        Zombie zombie = new Zombie(EntityType.ZOMBIE, level);
+                        zombie.moveTo(pos.getX() + ox, pos.getY(), pos.getZ() + oz, 0, 0);
+                        zombie.finalizeSpawn(level, level.getCurrentDifficultyAt(pos),
+                                MobSpawnType.EVENT, null, null);
+
+                        zombie.setItemSlot(EquipmentSlot.HEAD,     new ItemStack(helmets [RANDOM.nextInt(helmets.length)]));
+                        zombie.setItemSlot(EquipmentSlot.CHEST,    new ItemStack(chests  [RANDOM.nextInt(chests.length)]));
+                        zombie.setItemSlot(EquipmentSlot.LEGS,     new ItemStack(legs    [RANDOM.nextInt(legs.length)]));
+                        zombie.setItemSlot(EquipmentSlot.FEET,     new ItemStack(boots   [RANDOM.nextInt(boots.length)]));
+                        zombie.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(weapons [RANDOM.nextInt(weapons.length)]));
+
+                        // Небольшой шанс дропа снаряжения
+                        for (EquipmentSlot slot : EquipmentSlot.values()) {
+                            zombie.setDropChance(slot, 0.05f);
+                        }
+
+                        level.addFreshEntity(zombie);
+                    }
+                    broadcast(server, "Появился бронированный зомби! Берегись!");
                 }
         ));
 
