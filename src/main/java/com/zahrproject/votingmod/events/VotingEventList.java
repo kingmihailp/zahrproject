@@ -108,17 +108,22 @@ public class VotingEventList {
                 server -> {
                     // Пулы предметов для случайного снаряжения
                     Item[] helmets   = { Items.LEATHER_HELMET,    Items.IRON_HELMET,
-                                         Items.GOLDEN_HELMET,    Items.DIAMOND_HELMET    };
+                                         Items.GOLDEN_HELMET,    Items.DIAMOND_HELMET,
+                                         Items.NETHERITE_HELMET                         };
                     Item[] chests    = { Items.LEATHER_CHESTPLATE, Items.IRON_CHESTPLATE,
-                                         Items.GOLDEN_CHESTPLATE, Items.DIAMOND_CHESTPLATE };
+                                         Items.GOLDEN_CHESTPLATE, Items.DIAMOND_CHESTPLATE,
+                                         Items.NETHERITE_CHESTPLATE                      };
                     Item[] legs      = { Items.LEATHER_LEGGINGS,  Items.IRON_LEGGINGS,
-                                         Items.GOLDEN_LEGGINGS,  Items.DIAMOND_LEGGINGS  };
+                                         Items.GOLDEN_LEGGINGS,  Items.DIAMOND_LEGGINGS,
+                                         Items.NETHERITE_LEGGINGS                        };
                     Item[] boots     = { Items.LEATHER_BOOTS,     Items.IRON_BOOTS,
-                                         Items.GOLDEN_BOOTS,     Items.DIAMOND_BOOTS     };
+                                         Items.GOLDEN_BOOTS,     Items.DIAMOND_BOOTS,
+                                         Items.NETHERITE_BOOTS                           };
                     Item[] weapons   = { Items.WOODEN_SWORD, Items.STONE_SWORD,
                                          Items.IRON_SWORD,   Items.GOLDEN_SWORD,
-                                         Items.DIAMOND_SWORD, Items.IRON_AXE,
-                                         Items.DIAMOND_AXE                               };
+                                         Items.DIAMOND_SWORD, Items.NETHERITE_SWORD,
+                                         Items.IRON_AXE,     Items.DIAMOND_AXE,
+                                         Items.NETHERITE_AXE                             };
 
                     for (ServerPlayer player : server.getPlayerList().getPlayers()) {
                         ServerLevel level = player.serverLevel();
