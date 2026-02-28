@@ -22,6 +22,7 @@ import net.minecraft.world.entity.LightningBolt;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.MobCategory;
 import net.minecraft.world.entity.MobSpawnType;
+import net.minecraft.world.entity.animal.Rabbit;
 import net.minecraft.world.entity.item.PrimedTnt;
 import net.minecraft.world.entity.monster.Creeper;
 import net.minecraft.world.entity.monster.Zombie;
@@ -615,6 +616,43 @@ public class VotingEventList {
                         );
                     }
                     broadcast(server, "Структура \"" + chosen.location().getPath() + "\" появилась неподалёку!");
+                }
+        ));
+
+        // ── Special: random teleport ──────────────────────────────────────────
+
+        events.add(new VotingEvent(
+                "Телепортировать всех игроков в случайные точки мира",
+                server -> {
+                    for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                        ServerLevel level = player.serverLevel();
+                        int tx = RANDOM.nextInt(10001) - 5000; // [-5000 … 5000]
+                        int tz = RANDOM.nextInt(10001) - 5000;
+                        int ty = level.getHeight(Heightmap.Types.WORLD_SURFACE, tx, tz);
+                        player.teleportTo(tx + 0.5, ty, tz + 0.5);
+                    }
+                    broadcast(server, "Все игроки телепортированы в случайные места мира!");
+                }
+        ));
+
+        // ── Special: killer rabbit ────────────────────────────────────────────
+
+        events.add(new VotingEvent(
+                "Призвать кролика-убийцу рядом с каждым игроком",
+                server -> {
+                    for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                        ServerLevel level = player.serverLevel();
+                        BlockPos pos = player.blockPosition();
+                        double ox = (RANDOM.nextDouble() - 0.5) * 6;
+                        double oz = (RANDOM.nextDouble() - 0.5) * 6;
+                        Rabbit rabbit = new Rabbit(EntityType.RABBIT, level);
+                        rabbit.moveTo(pos.getX() + ox, pos.getY(), pos.getZ() + oz, 0, 0);
+                        rabbit.finalizeSpawn(level, level.getCurrentDifficultyAt(pos),
+                                MobSpawnType.EVENT, null, null);
+                        rabbit.setVariant(Rabbit.Variant.THE_KILLER_BUNNY);
+                        level.addFreshEntity(rabbit);
+                    }
+                    broadcast(server, "Кролик-убийца появился рядом с игроками! СПАСАЙТЕСЬ!");
                 }
         ));
 
