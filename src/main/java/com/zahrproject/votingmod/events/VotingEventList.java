@@ -30,7 +30,9 @@ import net.minecraft.world.item.EnchantedBookItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.EnchantmentInstance;
+import net.minecraftforge.registries.ForgeRegistries;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.RandomizableContainerBlockEntity;
@@ -613,6 +615,52 @@ public class VotingEventList {
                         );
                     }
                     broadcast(server, "Структура \"" + chosen.location().getPath() + "\" появилась неподалёку!");
+                }
+        ));
+
+        // ── Special: random experience ────────────────────────────────────────
+
+        events.add(new VotingEvent(
+                "Выдать всем игрокам случайное количество опыта",
+                server -> {
+                    int amount = 10 + RANDOM.nextInt(991); // [10 … 1000]
+                    for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                        player.giveExperiencePoints(amount);
+                    }
+                    broadcast(server, "Все игроки получили " + amount + " очков опыта!");
+                }
+        ));
+
+        // ── Special: random enchantment on a random inventory item ────────────
+
+        events.add(new VotingEvent(
+                "Зачаровать случайный предмет каждого игрока случайным чаром",
+                server -> {
+                    // Collect all registered enchantments from the Forge registry
+                    List<Enchantment> allEnchants =
+                            new ArrayList<>(ForgeRegistries.ENCHANTMENTS.getValues());
+                    if (allEnchants.isEmpty()) return;
+
+                    for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                        // Gather every non-empty item from main inventory + armor + offhand
+                        List<ItemStack> candidates = new ArrayList<>();
+                        player.getInventory().items.forEach(s -> { if (!s.isEmpty()) candidates.add(s); });
+                        player.getInventory().armor.forEach(s -> { if (!s.isEmpty()) candidates.add(s); });
+                        player.getInventory().offhand.forEach(s -> { if (!s.isEmpty()) candidates.add(s); });
+
+                        if (candidates.isEmpty()) continue;
+
+                        ItemStack target = candidates.get(RANDOM.nextInt(candidates.size()));
+                        Enchantment enchant = allEnchants.get(RANDOM.nextInt(allEnchants.size()));
+                        // Pick a random level between 1 and the enchantment's max level
+                        int level = 1 + RANDOM.nextInt(enchant.getMaxLevel());
+                        target.enchant(enchant, level);
+
+                        String enchantName = enchant.getFullname(level).getString();
+                        player.sendSystemMessage(Component.literal(
+                                "§6[Голосование] §eТвой предмет получил чар: " + enchantName + "!"));
+                    }
+                    broadcast(server, "Каждый игрок получил случайный чар на один из своих предметов!");
                 }
         ));
 
