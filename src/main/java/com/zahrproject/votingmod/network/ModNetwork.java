@@ -42,5 +42,12 @@ public class ModNetwork {
                 VoteResultPacket::encode,
                 VoteResultPacket::decode,
                 VoteResultPacket::handle);
+
+        // S2C: Server syncs the set of "child" player UUIDs to all clients
+        CHANNEL.registerMessage(id++,
+                SyncChildStatePacket.class,
+                SyncChildStatePacket::encode,
+                SyncChildStatePacket::decode,
+                SyncChildStatePacket::handle);
     }
 }

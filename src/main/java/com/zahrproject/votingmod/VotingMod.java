@@ -1,7 +1,9 @@
 package com.zahrproject.votingmod;
 
 import com.mojang.logging.LogUtils;
+import com.zahrproject.votingmod.client.ChildRenderHandler;
 import com.zahrproject.votingmod.command.VotingCommand;
+import com.zahrproject.votingmod.events.ChildEventManager;
 import com.zahrproject.votingmod.handler.ForgeEventHandler;
 import com.zahrproject.votingmod.network.ModNetwork;
 import net.minecraftforge.common.MinecraftForge;
@@ -28,6 +30,7 @@ public class VotingMod {
         modEventBus.addListener(this::clientSetup);
         MinecraftForge.EVENT_BUS.register(this);
         MinecraftForge.EVENT_BUS.register(new ForgeEventHandler());
+        MinecraftForge.EVENT_BUS.register(ChildEventManager.class);
         LOGGER.info("[VotingMod] Mod initialized!");
     }
 
@@ -37,6 +40,7 @@ public class VotingMod {
     }
 
     private void clientSetup(final FMLClientSetupEvent event) {
+        event.enqueueWork(() -> MinecraftForge.EVENT_BUS.register(ChildRenderHandler.class));
         LOGGER.info("[VotingMod] Client setup complete.");
     }
 

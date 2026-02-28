@@ -301,6 +301,16 @@ public class VotingEventList {
                 }
         ));
 
+        // ── Special: children ──────────────────────────────────────────────────
+
+        events.add(new VotingEvent(
+                "Превратить всех игроков в детей на 1 минуту",
+                server -> {
+                    ChildEventManager.activate(server, 60);
+                    broadcast(server, "Все игроки стали детьми! Ищите дыры в заборе!");
+                }
+        ));
+
         // ── Special: random loot chest ─────────────────────────────────────────
 
         events.add(new VotingEvent(
