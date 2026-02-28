@@ -17,33 +17,76 @@ import net.minecraftforge.api.distmarker.OnlyIn;
 import net.minecraftforge.client.event.RenderHandEvent;
 import net.minecraftforge.client.event.RenderPlayerEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.util.ObfuscationReflectionHelper;
 
+import java.lang.reflect.Field;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
  * Client-side renderer for the Skateboard enchantment.
  *
- * While skating (shield with Skateboard in offhand + sprinting):
- *   1. First-person offhand render is cancelled (RenderHandEvent).
- *   2. The offhand slot is temporarily emptied and walkDist/walkDistO
- *      are zeroed before the player model is drawn (Pre) — this hides
- *      the shield from the arm in all views and stops the walk animation.
- *   3. The shield is re-drawn enlarged and flat at the player's feet (Pre).
- *   4. The offhand slot and animation fields are restored after the
- *      model is drawn (Post).
+ * In Minecraft 1.20.x LivingEntityRenderer drives the limb-swing animation
+ * via entity.walkAnimation.speed() / .position(), NOT via walkDist/walkDistO.
+ * We therefore use reflection to zero those private fields before the model
+ * is rendered and restore them afterwards.
  */
 @OnlyIn(Dist.CLIENT)
 public class SkateboardRenderHandler {
 
+    // ── WalkAnimationState reflection ─────────────────────────────────────────
+    // Resolved lazily on first skating frame using the runtime type of
+    // player.walkAnimation so we never have to hardcode the package name.
+    private static Field  WALK_SPEED     = null;
+    private static Field  WALK_SPEED_OLD = null;
+    private static boolean reflectionDone = false; // attempted at least once
+
     /**
-     * Stores state temporarily removed from the player during model rendering.
-     * float[0] = walkDist, float[1] = walkDistO
+     * Attempt to resolve the 'speed' and 'speedOld' fields inside
+     * WalkAnimationState. Tries the official Mojang-mapped name first;
+     * falls back to enumerating float fields in declaration order
+     * (speedOld = index 0, speed = index 1, position = index 2).
      */
-    private static final Map<Integer, float[]> savedAnim    = new HashMap<>();
+    private static void initReflection(Object walkAnimInstance) {
+        if (reflectionDone) return;
+        reflectionDone = true;
+        try {
+            Class<?> cls = walkAnimInstance.getClass();
+
+            // Primary: official Mojang mapping names (used in dev + official runtime)
+            try {
+                WALK_SPEED     = ObfuscationReflectionHelper.findField(cls, "speed");
+                WALK_SPEED_OLD = ObfuscationReflectionHelper.findField(cls, "speedOld");
+                return; // success
+            } catch (Exception ignored) { }
+
+            // Fallback: positional float-field lookup
+            // WalkAnimationState declares: float speedOld, float speed, float position
+            // HotSpot preserves declaration order in getDeclaredFields().
+            List<Field> floats = new ArrayList<>();
+            for (Field f : cls.getDeclaredFields()) {
+                if (f.getType() == float.class) {
+                    f.setAccessible(true);
+                    floats.add(f);
+                }
+            }
+            if (floats.size() >= 2) {
+                WALK_SPEED_OLD = floats.get(0); // speedOld
+                WALK_SPEED     = floats.get(1); // speed
+            }
+        } catch (Exception ignored) { }
+    }
+
+    // ── Per-frame saved state (keyed by entity render id) ─────────────────────
+    /** float[0] = saved speedOld, float[1] = saved speed */
+    private static final Map<Integer, float[]>  savedAnim     = new HashMap<>();
     private static final Map<Integer, ItemStack> hiddenOffhand = new HashMap<>();
 
-    /** Cancels the first-person offhand render while skating. */
+    // ── Event handlers ────────────────────────────────────────────────────────
+
+    /** Cancel first-person offhand render while skating. */
     @SubscribeEvent
     public static void onRenderHand(RenderHandEvent event) {
         if (event.getHand() != InteractionHand.OFF_HAND) return;
@@ -55,44 +98,45 @@ public class SkateboardRenderHandler {
 
     /**
      * Before the player model is drawn:
-     *  - Zeros walkDist/walkDistO so the model renders in the neutral
-     *    standing pose (no arm/leg swing animation).
-     *  - Temporarily empties the offhand slot so the 3rd-person arm
-     *    renders nothing.
-     *  - Draws the shield enlarged and flat at the player's feet.
+     *  1. Zero walkAnimation.speed/speedOld → neutral standing pose.
+     *  2. Empty offhand slot → arm renders nothing in 3rd-person.
+     *  3. Draw the shield enlarged and flat at the player's feet.
      */
     @SubscribeEvent
     public static void onRenderPlayerPre(RenderPlayerEvent.Pre event) {
         Player player = event.getEntity();
         if (!isSkating(player)) return;
 
-        // ── Suppress walk animation ───────────────────────────────────────────
-        savedAnim.put(player.getId(), new float[]{ player.walkDist, player.walkDistO });
-        player.walkDist   = 0.0f;
-        player.walkDistO  = 0.0f;
+        // ── 1. Suppress walk animation ────────────────────────────────────────
+        Object walkAnim = player.walkAnimation; // no import needed — typed as Object
+        initReflection(walkAnim);
 
-        // ── Hide offhand shield from the player arm ───────────────────────────
+        float savedSpeed = 0f, savedOld = 0f;
+        if (WALK_SPEED != null && WALK_SPEED_OLD != null) {
+            try {
+                savedOld   = (float) WALK_SPEED_OLD.get(walkAnim);
+                savedSpeed = (float) WALK_SPEED.get(walkAnim);
+                WALK_SPEED_OLD.set(walkAnim, 0f);
+                WALK_SPEED.set(walkAnim, 0f);
+            } catch (Exception ignored) { }
+        }
+        savedAnim.put(player.getId(), new float[]{ savedOld, savedSpeed });
+
+        // ── 2. Hide offhand from the player arm ───────────────────────────────
         ItemStack shield = player.getInventory().offhand.get(0);
         hiddenOffhand.put(player.getId(), shield);
         player.getInventory().offhand.set(0, ItemStack.EMPTY);
 
-        // ── Draw shield flat at feet ──────────────────────────────────────────
-        PoseStack poseStack   = event.getPoseStack();
-        float partialTick     = event.getPartialTick();
+        // ── 3. Render shield flat at player's feet ────────────────────────────
+        PoseStack poseStack = event.getPoseStack();
+        float partialTick   = event.getPartialTick();
 
         poseStack.pushPose();
 
-        // Align to body yaw (same formula as LivingEntityRenderer.setupRotations).
         float bodyYRot = Mth.rotLerp(partialTick, player.yBodyRotO, player.yBodyRot);
         poseStack.mulPose(Axis.YP.rotationDegrees(180.0f - bodyYRot));
-
-        // Lift slightly so the shield doesn't clip into the ground.
         poseStack.translate(0.0, 0.05, 0.0);
-
-        // Scale up to resemble a skateboard deck.
         poseStack.scale(2.0f, 2.0f, 2.0f);
-
-        // Lay flat (90° tilt around X = face-down like a deck on the ground).
         poseStack.mulPose(Axis.XP.rotationDegrees(90.0f));
 
         Minecraft.getInstance().getItemRenderer().renderStatic(
@@ -109,22 +153,29 @@ public class SkateboardRenderHandler {
         poseStack.popPose();
     }
 
-    /** Restores the walk animation and offhand slot after the model has been drawn. */
+    /** Restore walkAnimation and offhand after the player model is drawn. */
     @SubscribeEvent
     public static void onRenderPlayerPost(RenderPlayerEvent.Post event) {
         int id = event.getEntity().getId();
 
+        // Restore walk animation
         float[] anim = savedAnim.remove(id);
-        if (anim != null) {
-            event.getEntity().walkDist  = anim[0];
-            event.getEntity().walkDistO = anim[1];
+        if (anim != null && WALK_SPEED != null && WALK_SPEED_OLD != null) {
+            try {
+                Object walkAnim = event.getEntity().walkAnimation;
+                WALK_SPEED_OLD.set(walkAnim, anim[0]);
+                WALK_SPEED.set(walkAnim, anim[1]);
+            } catch (Exception ignored) { }
         }
 
+        // Restore offhand
         ItemStack stored = hiddenOffhand.remove(id);
         if (stored != null) {
             event.getEntity().getInventory().offhand.set(0, stored);
         }
     }
+
+    // ── Helper ────────────────────────────────────────────────────────────────
 
     private static boolean isSkating(Player player) {
         ItemStack offhand = player.getOffhandItem();

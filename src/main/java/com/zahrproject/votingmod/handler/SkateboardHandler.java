@@ -20,32 +20,58 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Handles the Skateboard enchantment movement logic.
+ * Server-side handler for the Skateboard enchantment.
  *
- * Conditions for activation:
- *   - Player holds a Shield enchanted with "Скейтборд" in the offhand
- *   - Player is sprinting (default Ctrl key in Minecraft)
+ * Movement:
+ *   - Holding sprint (Ctrl) while shield with Skateboard is in offhand
+ *     builds up speed; releasing Ctrl decelerates.
+ *   - The board travels in a "skate direction" that is separate from the
+ *     player's look direction, so it persists through ricochets.
+ *   - When the player is NOT in ricochet mode, the skate direction
+ *     smoothly steers toward the look direction each tick (natural turning).
  *
- * Behaviour:
- *   - Speed builds up each tick while sprinting (acceleration)
- *   - Speed bleeds off each tick when not sprinting (deceleration)
- *   - Movement direction follows the player's horizontal look direction
- *   - Colliding with a mob or player at sufficient speed deals 2 hearts of damage
+ * Ricochet:
+ *   - Every tick we compare the player's actual position change (reported
+ *     by the client) with the velocity we sent last tick.
+ *   - If either the X or Z component is blocked (< 50% of expected), we
+ *     reflect the corresponding component of the skate direction.
+ *   - A ricochet locks the skate direction for RIC_TICKS ticks so the
+ *     player slides away from the wall rather than slamming back into it.
+ *
+ * Collision damage:
+ *   - At sufficient speed, nearby mobs/players take 2 hearts (4 HP) each,
+ *     subject to a per-entity 20-tick cooldown.
  */
 public class SkateboardHandler {
 
-    private static final double ACCELERATION      = 0.015; // blocks/tick added per tick
-    private static final double DECELERATION      = 0.008; // blocks/tick removed per tick
-    private static final double MAX_SPEED         = 0.6;   // ~1.2× normal sprint speed
-    private static final double HIT_SPEED_MIN     = 0.15;  // minimum speed to deal collision damage
-    private static final float  HIT_DAMAGE        = 4.0f;  // 2 hearts
-    private static final long   HIT_COOLDOWN_TICKS = 20L;  // 1 second per target
+    // ── Tuning constants ──────────────────────────────────────────────────────
+    private static final double ACCELERATION      = 0.015;
+    private static final double DECELERATION      = 0.008;
+    private static final double MAX_SPEED         = 0.6;
+    private static final double HIT_SPEED_MIN     = 0.15;
+    private static final float  HIT_DAMAGE        = 4.0f;   // 2 hearts
+    private static final long   HIT_COOLDOWN      = 20L;    // ticks
+    /** Maximum turn rate toward the look direction while NOT in ricochet. */
+    private static final double MAX_STEER_DEG     = 4.0;
+    /** Ticks to hold the reflected direction after a wall bounce. */
+    private static final int    RIC_TICKS         = 10;
+    /** Collision detection threshold: actual < expected × this → wall hit. */
+    private static final double RIC_THRESHOLD     = 0.5;
 
-    /** Per-player current skateboard speed (blocks/tick). */
-    private static final Map<UUID, Double> skateSpeed  = new HashMap<>();
+    // ── Per-player state ──────────────────────────────────────────────────────
+    private static final Map<UUID, Double>   skateSpeed    = new HashMap<>();
+    /** Normalised movement direction [dirX, dirZ]. */
+    private static final Map<UUID, double[]> skateDir      = new HashMap<>();
+    /** Ticks remaining in the current ricochet lock. */
+    private static final Map<UUID, Integer>  ricTimer      = new HashMap<>();
+    /** Position stored at the END of the previous tick. */
+    private static final Map<UUID, Vec3>     prevPos       = new HashMap<>();
+    /** Velocity [dx, dz] we sent last tick. */
+    private static final Map<UUID, double[]> prevExpected  = new HashMap<>();
+    /** Hit-damage cooldown per target entity. */
+    private static final Map<UUID, Long>     hitCooldown   = new HashMap<>();
 
-    /** Last game-tick a given entity was hit by skateboard collision. */
-    private static final Map<UUID, Long>   hitCooldown = new HashMap<>();
+    // ── Main tick ─────────────────────────────────────────────────────────────
 
     @SubscribeEvent
     public void onPlayerTick(TickEvent.PlayerTickEvent event) {
@@ -61,38 +87,96 @@ public class SkateboardHandler {
         UUID id = player.getUUID();
 
         if (!hasSkateShield) {
-            skateSpeed.remove(id);
+            cleanup(id);
             return;
         }
 
-        // Ctrl in Minecraft default keybinds = sprint
+        // ── Speed ─────────────────────────────────────────────────────────────
         boolean accelerating = player.isSprinting();
-
         double speed = skateSpeed.getOrDefault(id, 0.0);
-        if (accelerating) {
-            speed = Math.min(speed + ACCELERATION, MAX_SPEED);
-        } else {
-            speed = Math.max(speed - DECELERATION, 0.0);
-        }
+        speed = accelerating
+                ? Math.min(speed + ACCELERATION, MAX_SPEED)
+                : Math.max(speed - DECELERATION, 0.0);
 
         if (speed < 0.001) {
-            skateSpeed.remove(id);
+            cleanup(id);
             return;
         }
         skateSpeed.put(id, speed);
 
-        // Horizontal look direction
-        double yaw = Math.toRadians(player.getYRot());
-        double dx  = -Math.sin(yaw) * speed;
-        double dz  =  Math.cos(yaw) * speed;
+        // ── Ricochet detection ────────────────────────────────────────────────
+        // Compare the player's actual position change with what we expected.
+        // (The server receives client-reported positions, so this reflects
+        //  the real movement after the client's collision detection ran.)
+        Vec3 curPos = player.position();
+        boolean justRicocheted = false;
 
+        double[] dir;
+        int rt = ricTimer.getOrDefault(id, 0);
+
+        if (prevPos.containsKey(id) && prevExpected.containsKey(id)) {
+            Vec3    prev   = prevPos.get(id);
+            double[] exp   = prevExpected.get(id);
+            double  movedX = curPos.x - prev.x;
+            double  movedZ = curPos.z - prev.z;
+
+            boolean xHit = Math.abs(exp[0]) > 0.02
+                    && Math.abs(movedX) < Math.abs(exp[0]) * RIC_THRESHOLD;
+            boolean zHit = Math.abs(exp[1]) > 0.02
+                    && Math.abs(movedZ) < Math.abs(exp[1]) * RIC_THRESHOLD;
+
+            if (xHit || zHit) {
+                double[] old = skateDir.getOrDefault(id, dirFromYaw(player.getYRot()));
+                double newDirX = xHit ? -old[0] : old[0];
+                double newDirZ = zHit ? -old[1] : old[1];
+                skateDir.put(id, new double[]{ newDirX, newDirZ });
+                ricTimer.put(id, RIC_TICKS);
+                rt = RIC_TICKS;
+                justRicocheted = true;
+            }
+        }
+
+        // ── Skate direction ───────────────────────────────────────────────────
+        if (justRicocheted) {
+            dir = skateDir.get(id);
+        } else if (rt > 0) {
+            // Still locked to ricochet direction
+            dir = skateDir.getOrDefault(id, dirFromYaw(player.getYRot()));
+            ricTimer.put(id, rt - 1);
+        } else {
+            // Normal steering: smoothly turn the skate direction toward look
+            double[] current = skateDir.getOrDefault(id, dirFromYaw(player.getYRot()));
+            double lookYaw = Math.toRadians(player.getYRot());
+            double[] look  = new double[]{ -Math.sin(lookYaw), Math.cos(lookYaw) };
+
+            // Angle between current dir and look dir
+            double cross = current[0] * look[1] - current[1] * look[0]; // sin(angle)
+            double dot   = current[0] * look[0] + current[1] * look[1]; // cos(angle)
+            double angleDiff = Math.atan2(cross, dot); // [-π, π]
+
+            double maxTurn = Math.toRadians(MAX_STEER_DEG);
+            double turn    = Math.signum(angleDiff) * Math.min(Math.abs(angleDiff), maxTurn);
+
+            // Rotate current dir by 'turn' radians
+            double cos = Math.cos(turn), sin = Math.sin(turn);
+            double newX = current[0] * cos - current[1] * sin;
+            double newZ = current[0] * sin + current[1] * cos;
+            dir = new double[]{ newX, newZ };
+            skateDir.put(id, dir);
+        }
+
+        // ── Apply velocity ────────────────────────────────────────────────────
+        double dx = dir[0] * speed;
+        double dz = dir[1] * speed;
         Vec3 current = player.getDeltaMovement();
         player.setDeltaMovement(dx, current.y, dz);
-
-        // Push updated velocity to the client immediately
         player.connection.send(new ClientboundSetEntityMotionPacket(player));
 
-        // ── Collision damage ───────────────────────────────────────────────────
+        // Store state for next tick's ricochet check
+        prevPos.put(id, curPos);
+        prevExpected.put(id, new double[]{ dx, dz });
+
+        // ── Collision damage ──────────────────────────────────────────────────
         if (speed >= HIT_SPEED_MIN) {
             ServerLevel level = player.serverLevel();
             long now = level.getGameTime();
@@ -102,25 +186,39 @@ public class SkateboardHandler {
                     player.getBoundingBox().inflate(0.2),
                     e -> e != player
             );
-
             for (LivingEntity target : targets) {
                 long lastHit = hitCooldown.getOrDefault(target.getUUID(), 0L);
-                if (now - lastHit >= HIT_COOLDOWN_TICKS) {
+                if (now - lastHit >= HIT_COOLDOWN) {
                     target.hurt(level.damageSources().playerAttack(player), HIT_DAMAGE);
                     hitCooldown.put(target.getUUID(), now);
                 }
             }
-
-            // Periodic cleanup to prevent map from growing indefinitely
             if (player.tickCount % 100 == 0) {
                 hitCooldown.entrySet().removeIf(e -> now - e.getValue() > 60);
             }
         }
     }
 
-    /** Clean up speed state when a player disconnects. */
+    // ── Logout cleanup ────────────────────────────────────────────────────────
+
     @SubscribeEvent
     public void onPlayerLogout(PlayerEvent.PlayerLoggedOutEvent event) {
-        skateSpeed.remove(event.getEntity().getUUID());
+        cleanup(event.getEntity().getUUID());
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private static void cleanup(UUID id) {
+        skateSpeed.remove(id);
+        skateDir.remove(id);
+        ricTimer.remove(id);
+        prevPos.remove(id);
+        prevExpected.remove(id);
+    }
+
+    /** Returns a normalised [dirX, dirZ] from a Minecraft yaw (degrees). */
+    private static double[] dirFromYaw(float yawDeg) {
+        double yaw = Math.toRadians(yawDeg);
+        return new double[]{ -Math.sin(yaw), Math.cos(yaw) };
     }
 }
