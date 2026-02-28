@@ -18,22 +18,26 @@ import net.minecraftforge.client.event.RenderHandEvent;
 import net.minecraftforge.client.event.RenderPlayerEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 
+import java.util.HashMap;
+import java.util.Map;
+
 /**
  * Client-side renderer for the Skateboard enchantment.
  *
  * While skating (shield with Skateboard in offhand + sprinting):
- *   1. The first-person offhand render is cancelled so the shield
- *      disappears from the player's hand.
- *   2. The shield is re-drawn flat at the player's feet, aligned to
- *      the body yaw, giving a skateboard appearance.
+ *   1. First-person offhand render is cancelled (RenderHandEvent).
+ *   2. The offhand slot is temporarily emptied before the player model
+ *      is drawn, so the arm renders nothing in third-person (Pre).
+ *   3. The shield is re-drawn enlarged and flat at the player's feet (Pre).
+ *   4. The offhand slot is restored after the model is drawn (Post).
  */
 @OnlyIn(Dist.CLIENT)
 public class SkateboardRenderHandler {
 
-    /**
-     * Cancels the first-person offhand item render while skating so
-     * the shield is not visible in the player's hand.
-     */
+    /** Stores the shield removed from the offhand slot during model rendering. */
+    private static final Map<Integer, ItemStack> hiddenOffhand = new HashMap<>();
+
+    /** Cancels the first-person offhand render while skating. */
     @SubscribeEvent
     public static void onRenderHand(RenderHandEvent event) {
         if (event.getHand() != InteractionHand.OFF_HAND) return;
@@ -44,29 +48,38 @@ public class SkateboardRenderHandler {
     }
 
     /**
-     * Draws the shield flat on the ground at the player's feet.
-     * Fires before the player model so the shield renders underneath.
+     * Before the player model is drawn:
+     *  - Temporarily empties the offhand slot so the 3rd-person arm renders nothing.
+     *  - Draws the shield enlarged and flat at the player's feet.
      */
     @SubscribeEvent
     public static void onRenderPlayerPre(RenderPlayerEvent.Pre event) {
         Player player = event.getEntity();
         if (!isSkating(player)) return;
 
-        ItemStack shield = player.getOffhandItem();
+        // Hide the offhand item so the player model's arm renders nothing.
+        // Restored in onRenderPlayerPost.
+        ItemStack shield = player.getInventory().offhand.get(0);
+        hiddenOffhand.put(player.getId(), shield);
+        player.getInventory().offhand.set(0, ItemStack.EMPTY);
+
+        // Draw the shield flat at the player's feet.
         PoseStack poseStack = event.getPoseStack();
         float partialTick = event.getPartialTick();
 
         poseStack.pushPose();
 
-        // Rotate to match the player's body direction.
-        // LivingEntityRenderer.setupRotations uses (180 - bodyYRot) around Y.
+        // Align to the player's body yaw (same formula as LivingEntityRenderer.setupRotations).
         float bodyYRot = Mth.rotLerp(partialTick, player.yBodyRotO, player.yBodyRot);
         poseStack.mulPose(Axis.YP.rotationDegrees(180.0f - bodyYRot));
 
-        // Lift slightly above the ground so the shield doesn't clip into blocks.
+        // Lift slightly so the shield doesn't clip into the ground.
         poseStack.translate(0.0, 0.05, 0.0);
 
-        // Lay flat (90° around X turns the item face-down like a skateboard deck).
+        // Scale up to make it look like a skateboard deck.
+        poseStack.scale(2.0f, 2.0f, 2.0f);
+
+        // Lay flat (90° tilt around X = face-down, like a deck on the ground).
         poseStack.mulPose(Axis.XP.rotationDegrees(90.0f));
 
         Minecraft.getInstance().getItemRenderer().renderStatic(
@@ -81,6 +94,15 @@ public class SkateboardRenderHandler {
         );
 
         poseStack.popPose();
+    }
+
+    /** Restores the offhand slot after the player model has been fully drawn. */
+    @SubscribeEvent
+    public static void onRenderPlayerPost(RenderPlayerEvent.Post event) {
+        ItemStack stored = hiddenOffhand.remove(event.getEntity().getId());
+        if (stored != null) {
+            event.getEntity().getInventory().offhand.set(0, stored);
+        }
     }
 
     private static boolean isSkating(Player player) {
