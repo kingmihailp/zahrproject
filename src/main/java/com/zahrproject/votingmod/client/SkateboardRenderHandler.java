@@ -16,6 +16,7 @@ import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
 import net.minecraftforge.client.event.RenderHandEvent;
 import net.minecraftforge.client.event.RenderPlayerEvent;
+import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.util.ObfuscationReflectionHelper;
 
@@ -32,15 +33,28 @@ import java.util.Map;
  * via entity.walkAnimation.speed() / .position(), NOT via walkDist/walkDistO.
  * We therefore use reflection to zero those private fields before the model
  * is rendered and restore them afterwards.
+ *
+ * Animation suppression persists through the full deceleration phase:
+ * a client-side speed mirror (same constants as SkateboardHandler) tracks
+ * whether any speed remains, so the neutral pose lasts until speed == 0.
  */
 @OnlyIn(Dist.CLIENT)
 public class SkateboardRenderHandler {
 
+    // ── Speed constants (must match SkateboardHandler) ────────────────────────
+    private static final double ACCELERATION = 0.015;
+    private static final double DECELERATION = 0.008;
+    private static final double MAX_SPEED    = 0.6;
+
+    // ── Client-side speed mirror (keyed by entity render id) ──────────────────
+    /** Tracks non-zero skateboard speed for every player currently in the level. */
+    private static final Map<Integer, Double> clientSpeed = new HashMap<>();
+
     // ── WalkAnimationState reflection ─────────────────────────────────────────
     // Resolved lazily on first skating frame using the runtime type of
     // player.walkAnimation so we never have to hardcode the package name.
-    private static Field  WALK_SPEED     = null;
-    private static Field  WALK_SPEED_OLD = null;
+    private static Field   WALK_SPEED     = null;
+    private static Field   WALK_SPEED_OLD = null;
     private static boolean reflectionDone = false; // attempted at least once
 
     /**
@@ -84,14 +98,46 @@ public class SkateboardRenderHandler {
     private static final Map<Integer, float[]>  savedAnim     = new HashMap<>();
     private static final Map<Integer, ItemStack> hiddenOffhand = new HashMap<>();
 
+    // ── Client tick: mirror server-side speed to track deceleration ───────────
+
+    /**
+     * Runs every client game tick to keep clientSpeed in sync with the
+     * server-side SkateboardHandler. Accelerates while the player is
+     * sprinting with the skate shield, decelerates otherwise, and removes
+     * the entry once speed drops to zero.
+     */
+    @SubscribeEvent
+    public static void onClientTick(TickEvent.ClientTickEvent event) {
+        if (event.phase != TickEvent.Phase.END) return;
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.level == null) return;
+
+        for (Player player : mc.level.players()) {
+            int id = player.getId();
+            if (!hasSkateShield(player)) {
+                clientSpeed.remove(id);
+                continue;
+            }
+            double speed = clientSpeed.getOrDefault(id, 0.0);
+            speed = player.isSprinting()
+                    ? Math.min(speed + ACCELERATION, MAX_SPEED)
+                    : Math.max(speed - DECELERATION, 0.0);
+            if (speed < 0.001) {
+                clientSpeed.remove(id);
+            } else {
+                clientSpeed.put(id, speed);
+            }
+        }
+    }
+
     // ── Event handlers ────────────────────────────────────────────────────────
 
-    /** Cancel first-person offhand render while skating. */
+    /** Cancel first-person offhand render while skating or decelerating. */
     @SubscribeEvent
     public static void onRenderHand(RenderHandEvent event) {
         if (event.getHand() != InteractionHand.OFF_HAND) return;
         Player local = Minecraft.getInstance().player;
-        if (local != null && isSkating(local)) {
+        if (local != null && isMoving(local)) {
             event.setCanceled(true);
         }
     }
@@ -101,11 +147,13 @@ public class SkateboardRenderHandler {
      *  1. Zero walkAnimation.speed/speedOld → neutral standing pose.
      *  2. Empty offhand slot → arm renders nothing in 3rd-person.
      *  3. Draw the shield enlarged and flat at the player's feet.
+     *
+     * Applies whenever clientSpeed > 0 (sprint + deceleration).
      */
     @SubscribeEvent
     public static void onRenderPlayerPre(RenderPlayerEvent.Pre event) {
         Player player = event.getEntity();
-        if (!isSkating(player)) return;
+        if (!isMoving(player)) return;
 
         // ── 1. Suppress walk animation ────────────────────────────────────────
         Object walkAnim = player.walkAnimation; // no import needed — typed as Object
@@ -175,12 +223,21 @@ public class SkateboardRenderHandler {
         }
     }
 
-    // ── Helper ────────────────────────────────────────────────────────────────
+    // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private static boolean isSkating(Player player) {
+    /**
+     * Returns true whenever the player has any non-zero skateboard speed —
+     * both during active sprinting and the subsequent deceleration phase.
+     * The animation suppression ends only when speed fully reaches zero.
+     */
+    private static boolean isMoving(Player player) {
+        return clientSpeed.containsKey(player.getId()) && hasSkateShield(player);
+    }
+
+    /** Returns true if the player has a Skateboard-enchanted shield in the offhand. */
+    private static boolean hasSkateShield(Player player) {
         ItemStack offhand = player.getOffhandItem();
-        return player.isSprinting()
-                && offhand.getItem() == Items.SHIELD
+        return offhand.getItem() == Items.SHIELD
                 && EnchantmentHelper.getItemEnchantmentLevel(
                         ModEnchantments.SKATEBOARD.get(), offhand) > 0;
     }
