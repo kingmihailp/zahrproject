@@ -2,7 +2,9 @@ package com.zahrproject.votingmod.handler;
 
 import com.zahrproject.votingmod.enchantments.ModEnchantments;
 import net.minecraft.network.protocol.game.ClientboundSetEntityMotionPacket;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.EnchantmentHelper;
@@ -13,6 +15,7 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.LogicalSide;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -27,15 +30,22 @@ import java.util.UUID;
  *   - Speed builds up each tick while sprinting (acceleration)
  *   - Speed bleeds off each tick when not sprinting (deceleration)
  *   - Movement direction follows the player's horizontal look direction
+ *   - Colliding with a mob or player at sufficient speed deals 2 hearts of damage
  */
 public class SkateboardHandler {
 
-    private static final double ACCELERATION = 0.015; // blocks/tick added per tick
-    private static final double DECELERATION = 0.008; // blocks/tick removed per tick
-    private static final double MAX_SPEED    = 0.6;   // ~1.2× normal sprint speed
+    private static final double ACCELERATION      = 0.015; // blocks/tick added per tick
+    private static final double DECELERATION      = 0.008; // blocks/tick removed per tick
+    private static final double MAX_SPEED         = 0.6;   // ~1.2× normal sprint speed
+    private static final double HIT_SPEED_MIN     = 0.15;  // minimum speed to deal collision damage
+    private static final float  HIT_DAMAGE        = 4.0f;  // 2 hearts
+    private static final long   HIT_COOLDOWN_TICKS = 20L;  // 1 second per target
 
     /** Per-player current skateboard speed (blocks/tick). */
-    private static final Map<UUID, Double> skateSpeed = new HashMap<>();
+    private static final Map<UUID, Double> skateSpeed  = new HashMap<>();
+
+    /** Last game-tick a given entity was hit by skateboard collision. */
+    private static final Map<UUID, Long>   hitCooldown = new HashMap<>();
 
     @SubscribeEvent
     public void onPlayerTick(TickEvent.PlayerTickEvent event) {
@@ -81,6 +91,31 @@ public class SkateboardHandler {
 
         // Push updated velocity to the client immediately
         player.connection.send(new ClientboundSetEntityMotionPacket(player));
+
+        // ── Collision damage ───────────────────────────────────────────────────
+        if (speed >= HIT_SPEED_MIN) {
+            ServerLevel level = player.serverLevel();
+            long now = level.getGameTime();
+
+            List<LivingEntity> targets = level.getEntitiesOfClass(
+                    LivingEntity.class,
+                    player.getBoundingBox().inflate(0.2),
+                    e -> e != player
+            );
+
+            for (LivingEntity target : targets) {
+                long lastHit = hitCooldown.getOrDefault(target.getUUID(), 0L);
+                if (now - lastHit >= HIT_COOLDOWN_TICKS) {
+                    target.hurt(level.damageSources().playerAttack(player), HIT_DAMAGE);
+                    hitCooldown.put(target.getUUID(), now);
+                }
+            }
+
+            // Periodic cleanup to prevent map from growing indefinitely
+            if (player.tickCount % 100 == 0) {
+                hitCooldown.entrySet().removeIf(e -> now - e.getValue() > 60);
+            }
+        }
     }
 
     /** Clean up speed state when a player disconnects. */
