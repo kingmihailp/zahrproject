@@ -505,15 +505,19 @@ public class VotingEventList {
         events.add(new VotingEvent(
                 "Призвать случайную лодку рядом с каждым игроком",
                 server -> {
-                    @SuppressWarnings("unchecked")
-                    EntityType<?>[] boatTypes = {
-                            EntityType.OAK_BOAT,      EntityType.SPRUCE_BOAT,
-                            EntityType.BIRCH_BOAT,    EntityType.JUNGLE_BOAT,
-                            EntityType.ACACIA_BOAT,   EntityType.DARK_OAK_BOAT,
-                            EntityType.MANGROVE_BOAT, EntityType.CHERRY_BOAT,
-                            EntityType.BAMBOO_RAFT
-                    };
-                    EntityType<?> boatType = boatTypes[RANDOM.nextInt(boatTypes.length)];
+                    // Собираем все типы лодок и плотов из реестра по суффиксу имени
+                    List<EntityType<?>> boatTypes = new ArrayList<>();
+                    for (EntityType<?> type : BuiltInRegistries.ENTITY_TYPE) {
+                        ResourceLocation key = BuiltInRegistries.ENTITY_TYPE.getKey(type);
+                        if (key == null) continue;
+                        String path = key.getPath();
+                        if (path.endsWith("_boat") || path.endsWith("_raft")) {
+                            boatTypes.add(type);
+                        }
+                    }
+                    if (boatTypes.isEmpty()) return;
+
+                    EntityType<?> boatType = boatTypes.get(RANDOM.nextInt(boatTypes.size()));
                     String boatName = boatType.getDescription().getString();
 
                     for (ServerPlayer player : server.getPlayerList().getPlayers()) {
