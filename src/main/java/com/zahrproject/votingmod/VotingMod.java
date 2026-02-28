@@ -3,8 +3,10 @@ package com.zahrproject.votingmod;
 import com.mojang.logging.LogUtils;
 import com.zahrproject.votingmod.client.ChildRenderHandler;
 import com.zahrproject.votingmod.command.VotingCommand;
+import com.zahrproject.votingmod.enchantments.ModEnchantments;
 import com.zahrproject.votingmod.events.ChildEventManager;
 import com.zahrproject.votingmod.handler.ForgeEventHandler;
+import com.zahrproject.votingmod.handler.SkateboardHandler;
 import com.zahrproject.votingmod.network.ModNetwork;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.RegisterCommandsEvent;
@@ -28,8 +30,10 @@ public class VotingMod {
         IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
         modEventBus.addListener(this::commonSetup);
         modEventBus.addListener(this::clientSetup);
+        ModEnchantments.ENCHANTMENTS.register(modEventBus);
         MinecraftForge.EVENT_BUS.register(this);
         MinecraftForge.EVENT_BUS.register(new ForgeEventHandler());
+        MinecraftForge.EVENT_BUS.register(new SkateboardHandler());
         MinecraftForge.EVENT_BUS.register(ChildEventManager.class);
         LOGGER.info("[VotingMod] Mod initialized!");
     }

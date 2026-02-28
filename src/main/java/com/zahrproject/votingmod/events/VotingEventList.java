@@ -25,9 +25,12 @@ import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.entity.item.PrimedTnt;
 import net.minecraft.world.entity.monster.Creeper;
 import net.minecraft.world.entity.monster.Zombie;
+import com.zahrproject.votingmod.enchantments.ModEnchantments;
+import net.minecraft.world.item.EnchantedBookItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.enchantment.EnchantmentInstance;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.RandomizableContainerBlockEntity;
@@ -497,6 +500,54 @@ public class VotingEventList {
                         }
                     }
                     broadcast(server, "Рядом с каждым игроком появился сундук с сокровищами!");
+                }
+        ));
+
+        // ── Special: prison ───────────────────────────────────────────────────
+
+        events.add(new VotingEvent(
+                "Заключить каждого игрока в мини-тюрьму",
+                server -> {
+                    for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                        ServerLevel level = player.serverLevel();
+                        BlockPos pos = player.blockPosition();
+
+                        // Floor (Y-1) и Ceiling (Y+2) — каменные кирпичи
+                        for (int x = -2; x <= 2; x++)
+                            for (int z = -2; z <= 2; z++) {
+                                level.setBlock(pos.offset(x, -1, z),
+                                        Blocks.STONE_BRICKS.defaultBlockState(), 3);
+                                level.setBlock(pos.offset(x,  2, z),
+                                        Blocks.STONE_BRICKS.defaultBlockState(), 3);
+                            }
+
+                        // Стены (Y=0,1): решётки по периметру, воздух внутри
+                        for (int y = 0; y <= 1; y++)
+                            for (int x = -2; x <= 2; x++)
+                                for (int z = -2; z <= 2; z++) {
+                                    boolean isWall = (x == -2 || x == 2 || z == -2 || z == 2);
+                                    level.setBlock(pos.offset(x, y, z),
+                                            isWall ? Blocks.IRON_BARS.defaultBlockState()
+                                                   : Blocks.AIR.defaultBlockState(), 3);
+                                }
+                    }
+                    broadcast(server, "Все игроки заперты в тюрьме!");
+                }
+        ));
+
+        // ── Special: skateboard book ───────────────────────────────────────────
+
+        events.add(new VotingEvent(
+                "Выдать каждому игроку зачарованную книгу «Скейтборд»",
+                server -> {
+                    for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                        ItemStack book = new ItemStack(Items.ENCHANTED_BOOK);
+                        EnchantedBookItem.addEnchantment(book,
+                                new EnchantmentInstance(ModEnchantments.SKATEBOARD.get(), 1));
+                        player.getInventory().add(book);
+                    }
+                    broadcast(server, "Все получили зачарованную книгу «Скейтборд»! "
+                            + "Зачаруйте щит, возьмите его в левую руку и жмите Ctrl!");
                 }
         ));
 
