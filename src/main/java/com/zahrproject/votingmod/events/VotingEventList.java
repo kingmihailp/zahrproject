@@ -1,6 +1,7 @@
 package com.zahrproject.votingmod.events;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
@@ -8,9 +9,13 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LightningBolt;
+import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.MobCategory;
 import net.minecraft.world.entity.MobSpawnType;
+import net.minecraft.world.entity.item.PrimedTnt;
 import net.minecraft.world.entity.monster.Creeper;
 import net.minecraft.world.entity.monster.Zombie;
 import net.minecraft.world.item.ItemStack;
@@ -298,6 +303,66 @@ public class VotingEventList {
                     for (ServerPlayer p : server.getPlayerList().getPlayers())
                         p.getInventory().add(new ItemStack(Items.ROTTEN_FLESH, 16));
                     broadcast(server, "Все игроки получили гнилое мясо!");
+                }
+        ));
+
+        // ── Special: TNT rain ──────────────────────────────────────────────────
+
+        events.add(new VotingEvent(
+                "Дождь из динамита над каждым игроком",
+                server -> {
+                    for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                        ServerLevel level = player.serverLevel();
+                        BlockPos pos = player.blockPosition();
+                        for (int i = 0; i < 7; i++) {
+                            double ox = (RANDOM.nextDouble() - 0.5) * 10; // ±5 блоков
+                            double oz = (RANDOM.nextDouble() - 0.5) * 10;
+                            double oy = 3 + RANDOM.nextInt(2);             // +3 или +4 блока
+                            PrimedTnt tnt = new PrimedTnt(level,
+                                    pos.getX() + ox,
+                                    pos.getY() + oy,
+                                    pos.getZ() + oz,
+                                    null);
+                            tnt.setFuse(40 + RANDOM.nextInt(21)); // 2–3 секунды
+                            level.addFreshEntity(tnt);
+                        }
+                    }
+                    broadcast(server, "Дождь из динамита! Спасайся кто может!");
+                }
+        ));
+
+        // ── Special: random mob from registry ──────────────────────────────────
+
+        events.add(new VotingEvent(
+                "Призвать случайного моба рядом с каждым игроком",
+                server -> {
+                    // Collect all entity types that are actual mobs (non-MISC categories)
+                    List<EntityType<?>> spawnable = new ArrayList<>();
+                    for (EntityType<?> type : BuiltInRegistries.ENTITY_TYPE) {
+                        if (type.getCategory() != MobCategory.MISC) {
+                            spawnable.add(type);
+                        }
+                    }
+                    if (spawnable.isEmpty()) return;
+
+                    EntityType<?> chosen = spawnable.get(RANDOM.nextInt(spawnable.size()));
+                    String mobName = chosen.getDescription().getString();
+
+                    for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                        ServerLevel level = player.serverLevel();
+                        BlockPos pos = player.blockPosition();
+                        double ox = (RANDOM.nextDouble() - 0.5) * 6;
+                        double oz = (RANDOM.nextDouble() - 0.5) * 6;
+                        Entity entity = chosen.create(level);
+                        if (entity == null) continue;
+                        entity.moveTo(pos.getX() + ox, pos.getY(), pos.getZ() + oz, 0, 0);
+                        if (entity instanceof Mob mob) {
+                            mob.finalizeSpawn(level, level.getCurrentDifficultyAt(pos),
+                                    MobSpawnType.EVENT, null, null);
+                        }
+                        level.addFreshEntity(entity);
+                    }
+                    broadcast(server, "Случайный моб появился рядом с игроками: " + mobName + "!");
                 }
         ));
 
