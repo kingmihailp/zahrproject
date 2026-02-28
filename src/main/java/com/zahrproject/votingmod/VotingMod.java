@@ -2,6 +2,7 @@ package com.zahrproject.votingmod;
 
 import com.mojang.logging.LogUtils;
 import com.zahrproject.votingmod.client.ChildRenderHandler;
+import com.zahrproject.votingmod.client.SkateboardRenderHandler;
 import com.zahrproject.votingmod.command.VotingCommand;
 import com.zahrproject.votingmod.enchantments.ModEnchantments;
 import com.zahrproject.votingmod.events.ChildEventManager;
@@ -44,7 +45,10 @@ public class VotingMod {
     }
 
     private void clientSetup(final FMLClientSetupEvent event) {
-        event.enqueueWork(() -> MinecraftForge.EVENT_BUS.register(ChildRenderHandler.class));
+        event.enqueueWork(() -> {
+            MinecraftForge.EVENT_BUS.register(ChildRenderHandler.class);
+            MinecraftForge.EVENT_BUS.register(SkateboardRenderHandler.class);
+        });
         LOGGER.info("[VotingMod] Client setup complete.");
     }
 
