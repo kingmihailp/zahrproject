@@ -12,6 +12,7 @@ import net.minecraft.world.level.levelgen.structure.Structure;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
@@ -373,6 +374,20 @@ public class VotingEventList {
                 }
         ));
 
+        events.add(new VotingEvent(
+                "Выдать всем игрокам случайный эффект на 20 секунд",
+                server -> {
+                    List<MobEffect> effects = new ArrayList<>(BuiltInRegistries.MOB_EFFECT.stream().toList());
+                    if (effects.isEmpty()) return;
+                    MobEffect chosen = effects.get(RANDOM.nextInt(effects.size()));
+                    String effectName = chosen.getDisplayName().getString();
+                    for (ServerPlayer p : server.getPlayerList().getPlayers()) {
+                        p.addEffect(new MobEffectInstance(chosen, 400, 0)); // 400 тиков = 20 секунд
+                    }
+                    broadcast(server, "Все игроки получили эффект: " + effectName + "!");
+                }
+        ));
+
         // ── Items ──────────────────────────────────────────────────────────────
 
         events.add(new VotingEvent(
@@ -482,6 +497,36 @@ public class VotingEventList {
                         }
                     }
                     broadcast(server, "Рядом с каждым игроком появился сундук с сокровищами!");
+                }
+        ));
+
+        // ── Special: boat ─────────────────────────────────────────────────────
+
+        events.add(new VotingEvent(
+                "Призвать случайную лодку рядом с каждым игроком",
+                server -> {
+                    @SuppressWarnings("unchecked")
+                    EntityType<?>[] boatTypes = {
+                            EntityType.OAK_BOAT,      EntityType.SPRUCE_BOAT,
+                            EntityType.BIRCH_BOAT,    EntityType.JUNGLE_BOAT,
+                            EntityType.ACACIA_BOAT,   EntityType.DARK_OAK_BOAT,
+                            EntityType.MANGROVE_BOAT, EntityType.CHERRY_BOAT,
+                            EntityType.BAMBOO_RAFT
+                    };
+                    EntityType<?> boatType = boatTypes[RANDOM.nextInt(boatTypes.length)];
+                    String boatName = boatType.getDescription().getString();
+
+                    for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                        ServerLevel level = player.serverLevel();
+                        BlockPos pos = player.blockPosition();
+                        double ox = (RANDOM.nextDouble() - 0.5) * 4;
+                        double oz = (RANDOM.nextDouble() - 0.5) * 4;
+                        Entity boat = boatType.create(level);
+                        if (boat == null) continue;
+                        boat.moveTo(pos.getX() + ox, pos.getY(), pos.getZ() + oz, 0, 0);
+                        level.addFreshEntity(boat);
+                    }
+                    broadcast(server, "Рядом с игроками появилась " + boatName + "!");
                 }
         ));
 
