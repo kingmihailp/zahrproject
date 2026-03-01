@@ -760,6 +760,43 @@ public class VotingEventList {
                 }
         ));
 
+        // ── Special: cobweb cube ──────────────────────────────────────────────
+
+        events.add(new VotingEvent(
+                "Отчаянное положение",
+                server -> {
+                    for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                        ServerLevel level = player.serverLevel();
+                        BlockPos center = player.blockPosition();
+                        for (int dx = -1; dx <= 1; dx++) {
+                            for (int dy = 0; dy <= 2; dy++) {
+                                for (int dz = -1; dz <= 1; dz++) {
+                                    level.setBlock(center.offset(dx, dy, dz),
+                                            Blocks.COBWEB.defaultBlockState(), 3);
+                                }
+                            }
+                        }
+                    }
+                    broadcast(server, "Отчаянное положение! Все игроки замурованы в паутине!");
+                }
+        ));
+
+        // ── Special: charged creeper ──────────────────────────────────────────
+
+        events.add(new VotingEvent(
+                "Взрывной характер",
+                server -> {
+                    for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                        ServerLevel level = player.serverLevel();
+                        Creeper creeper = new Creeper(EntityType.CREEPER, level);
+                        creeper.setPowered(true);
+                        creeper.moveTo(player.getX() + 2.5, player.getY(), player.getZ(), 0, 0);
+                        level.addFreshEntity(creeper);
+                    }
+                    broadcast(server, "Взрывной характер! Заряженные криперы спавнятся рядом с игроками!");
+                }
+        ));
+
         return events;
     }
 
