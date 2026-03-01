@@ -731,17 +731,14 @@ public class VotingEventList {
                         fireworksTag.put("Explosions", explosionsList);
                         tag.put("Fireworks", fireworksTag);
 
-                        // Запускаем игрока вверх
-                        player.setDeltaMovement(
-                                player.getDeltaMovement().x,
-                                4.0,
-                                player.getDeltaMovement().z);
-
-                        // Спавним фейерверк у игрока
+                        // Спавним фейерверк прямо под игроком, даём ему скорость вверх
+                        // и сажаем игрока верхом
                         FireworkRocketEntity firework = new FireworkRocketEntity(level,
-                                pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5,
+                                player.getX(), player.getY(), player.getZ(),
                                 fireworkItem);
+                        firework.setDeltaMovement(0.0, 1.8, 0.0);
                         level.addFreshEntity(firework);
+                        player.startRiding(firework, true);
                     }
                     broadcast(server, "ПИРОТЕХНИКА! Все игроки улетели в небо!");
                 }

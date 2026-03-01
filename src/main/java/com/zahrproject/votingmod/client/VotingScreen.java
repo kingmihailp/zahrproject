@@ -40,7 +40,7 @@ public class VotingScreen extends Screen {
     private int     resultVotesA   = 0;
     private int     resultVotesB   = 0;
     private long    resultShowStartMs = 0;
-    private static final long RESULT_DISPLAY_MS = 5500;
+    private static final long RESULT_DISPLAY_MS = 2000;
 
     // Buttons
     private MultilineButton btnA;
