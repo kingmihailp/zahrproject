@@ -11,6 +11,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.event.level.BlockEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -24,6 +25,9 @@ public class GoldenPlayerHandler {
 
     /** UUID → expiry timestamp in milliseconds */
     private static final Map<UUID, Long> goldenPlayers = new ConcurrentHashMap<>();
+
+    /** NBT key used to persist the expiry timestamp in the player's data. */
+    private static final String NBT_KEY = "votingmod_midas_expiry";
 
     /** Items that are already "golden" — never replaced. */
     private static final Set<Item> EXEMPT_ITEMS = Set.of(
@@ -98,6 +102,47 @@ public class GoldenPlayerHandler {
             return false;
         }
         return true;
+    }
+
+    // ── Login / logout persistence ────────────────────────────────────────────
+
+    /**
+     * On login: if the player was golden when the server stopped (or when they
+     * logged out), restore the effect for the remaining duration.
+     * Within the same running session the map already contains their entry, so
+     * nothing extra is needed.
+     */
+    @SubscribeEvent
+    public void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event) {
+        if (!(event.getEntity() instanceof ServerPlayer player)) return;
+        UUID uuid = player.getUUID();
+        if (isGolden(uuid)) return; // same session, already tracked
+
+        long savedExpiry = player.getPersistentData().getLong(NBT_KEY);
+        if (savedExpiry > System.currentTimeMillis()) {
+            goldenPlayers.put(uuid, savedExpiry);
+            replaceHandItem(player, InteractionHand.MAIN_HAND);
+            replaceHandItem(player, InteractionHand.OFF_HAND);
+            for (Map.Entry<EquipmentSlot, Item> e : ARMOR_TRANSFORMS.entrySet()) {
+                replaceArmorItem(player, e.getKey(), e.getValue());
+            }
+        }
+    }
+
+    /**
+     * On logout: write the remaining expiry into the player's persistent NBT
+     * so the effect can be restored after a server restart.
+     */
+    @SubscribeEvent
+    public void onPlayerLogout(PlayerEvent.PlayerLoggedOutEvent event) {
+        if (!(event.getEntity() instanceof ServerPlayer player)) return;
+        UUID uuid = player.getUUID();
+        Long expiry = goldenPlayers.get(uuid);
+        if (expiry != null && expiry > System.currentTimeMillis()) {
+            player.getPersistentData().putLong(NBT_KEY, expiry);
+        } else {
+            player.getPersistentData().remove(NBT_KEY);
+        }
     }
 
     // ── Hand item replacement (continuous) + gold trail ───────────────────────

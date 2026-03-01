@@ -10,6 +10,7 @@ import net.minecraft.world.entity.animal.Chicken;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Items;
 import net.minecraftforge.event.entity.EntityEvent;
+import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.network.PacketDistributor;
@@ -25,6 +26,9 @@ import java.util.concurrent.*;
  *
  * The state is synced to all clients via {@link SyncChildStatePacket} so
  * that {@link #onEntitySize} fires correctly on both sides.
+ *
+ * State persists across login/logout within the same server session and
+ * across server restarts via {@code player.getPersistentData()}.
  */
 public class ChildEventManager {
 
@@ -32,6 +36,12 @@ public class ChildEventManager {
 
     /** Set of UUIDs that are currently "children". Used on both sides. */
     private static final Set<UUID> childPlayers = ConcurrentHashMap.newKeySet();
+
+    /** UUID → absolute expiry timestamp (ms). Server-side only. */
+    private static final Map<UUID, Long> childExpiry = new ConcurrentHashMap<>();
+
+    /** NBT key used to persist the expiry timestamp in the player's data. */
+    private static final String NBT_KEY = "votingmod_child_expiry";
 
     /** Scheduler for the revert timer. */
     private static final ScheduledExecutorService SCHEDULER =
@@ -53,7 +63,9 @@ public class ChildEventManager {
         Set<UUID> activated = new HashSet<>();
         for (ServerPlayer p : players) activated.add(p.getUUID());
 
+        long expiry = System.currentTimeMillis() + durationSeconds * 1000L;
         childPlayers.addAll(activated);
+        for (UUID uuid : activated) childExpiry.put(uuid, expiry);
 
         // Refresh bounding boxes so the smaller hitbox takes effect immediately
         for (ServerPlayer p : players) p.refreshDimensions();
@@ -66,6 +78,7 @@ public class ChildEventManager {
         // Schedule revert
         SCHEDULER.schedule(() -> {
             childPlayers.removeAll(activated);
+            for (UUID uuid : activated) childExpiry.remove(uuid);
             server.execute(() -> {
                 for (UUID uuid : activated) {
                     ServerPlayer p = server.getPlayerList().getPlayer(uuid);
@@ -123,6 +136,65 @@ public class ChildEventManager {
 
         player.startRiding(chicken, true);
         event.setCanceled(true);
+    }
+
+    /**
+     * On login: re-sync child state to the joining client.
+     * If the server was restarted, restore the state from the player's NBT
+     * (provided the saved expiry has not yet passed).
+     */
+    @SubscribeEvent
+    public static void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event) {
+        if (!(event.getEntity() instanceof ServerPlayer player)) return;
+        MinecraftServer server = player.getServer();
+        if (server == null) return;
+        UUID uuid = player.getUUID();
+
+        if (childPlayers.contains(uuid)) {
+            // Same session — UUID still tracked; just re-sync this client.
+            SyncChildStatePacket pkt = new SyncChildStatePacket(new HashSet<>(childPlayers));
+            ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), pkt);
+            server.execute(player::refreshDimensions);
+            return;
+        }
+
+        // Server was restarted — check persistent player data.
+        long savedExpiry = player.getPersistentData().getLong(NBT_KEY);
+        long now = System.currentTimeMillis();
+        if (savedExpiry > now) {
+            long remainingMs = savedExpiry - now;
+            childPlayers.add(uuid);
+            childExpiry.put(uuid, savedExpiry);
+            server.execute(() -> {
+                player.refreshDimensions();
+                syncToAll(server);
+            });
+            SCHEDULER.schedule(() -> {
+                childPlayers.remove(uuid);
+                childExpiry.remove(uuid);
+                server.execute(() -> {
+                    ServerPlayer p = server.getPlayerList().getPlayer(uuid);
+                    if (p != null) p.refreshDimensions();
+                    syncToAll(server);
+                });
+            }, remainingMs, TimeUnit.MILLISECONDS);
+        }
+    }
+
+    /**
+     * On logout: save remaining child-state time to the player's persistent
+     * NBT so the effect survives a server restart.
+     */
+    @SubscribeEvent
+    public static void onPlayerLogout(PlayerEvent.PlayerLoggedOutEvent event) {
+        if (!(event.getEntity() instanceof ServerPlayer player)) return;
+        UUID uuid = player.getUUID();
+        Long expiry = childExpiry.get(uuid);
+        if (expiry != null && expiry > System.currentTimeMillis()) {
+            player.getPersistentData().putLong(NBT_KEY, expiry);
+        } else {
+            player.getPersistentData().remove(NBT_KEY);
+        }
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

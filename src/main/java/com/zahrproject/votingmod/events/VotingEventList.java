@@ -402,24 +402,6 @@ public class VotingEventList {
 
         // ── Items ──────────────────────────────────────────────────────────────
 
-        events.add(new VotingEvent(
-                "Дать всем игрокам 5 алмазов",
-                server -> {
-                    for (ServerPlayer p : server.getPlayerList().getPlayers())
-                        p.getInventory().add(new ItemStack(Items.DIAMOND, 5));
-                    broadcast(server, "Все игроки получили алмазы!");
-                }
-        ));
-
-        events.add(new VotingEvent(
-                "Дать всем игрокам 16 гнилого мяса",
-                server -> {
-                    for (ServerPlayer p : server.getPlayerList().getPlayers())
-                        p.getInventory().add(new ItemStack(Items.ROTTEN_FLESH, 16));
-                    broadcast(server, "Все игроки получили гнилое мясо!");
-                }
-        ));
-
         // ── Special: TNT rain ──────────────────────────────────────────────────
 
         events.add(new VotingEvent(
@@ -634,6 +616,10 @@ public class VotingEventList {
                         ServerLevel level = player.serverLevel();
                         int tx = RANDOM.nextInt(10001) - 5000; // [-5000 … 5000]
                         int tz = RANDOM.nextInt(10001) - 5000;
+                        // Force-load the destination chunk so the WORLD_SURFACE
+                        // heightmap is populated; without this getHeight() returns
+                        // getMinBuildHeight()-1 for unloaded chunks (≈ -65).
+                        level.getChunk(tx >> 4, tz >> 4);
                         int ty = level.getHeight(Heightmap.Types.WORLD_SURFACE, tx, tz);
                         player.teleportTo(tx + 0.5, ty, tz + 0.5);
                     }
