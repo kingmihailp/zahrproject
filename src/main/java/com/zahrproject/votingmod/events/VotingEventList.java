@@ -789,7 +789,9 @@ public class VotingEventList {
                     for (ServerPlayer player : server.getPlayerList().getPlayers()) {
                         ServerLevel level = player.serverLevel();
                         Creeper creeper = new Creeper(EntityType.CREEPER, level);
-                        creeper.setPowered(true);
+                        CompoundTag creeperTag = new CompoundTag();
+                        creeperTag.putBoolean("powered", true);
+                        creeper.readAdditionalSaveData(creeperTag);
                         creeper.moveTo(player.getX() + 2.5, player.getY(), player.getZ(), 0, 0);
                         level.addFreshEntity(creeper);
                     }
