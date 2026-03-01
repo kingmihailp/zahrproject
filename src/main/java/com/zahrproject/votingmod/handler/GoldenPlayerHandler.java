@@ -24,6 +24,7 @@ public class GoldenPlayerHandler {
     /** UUID → expiry timestamp in milliseconds */
     private static final Map<UUID, Long> goldenPlayers = new ConcurrentHashMap<>();
 
+    /** Items that are already "golden" — never replaced. */
     private static final Set<Item> EXEMPT_ITEMS = Set.of(
             Items.GOLDEN_CARROT,
             Items.GOLDEN_APPLE,
@@ -46,9 +47,15 @@ public class GoldenPlayerHandler {
             Items.BELL
     );
 
+    /** Special transforms: carrot → golden carrot, apple → golden apple. */
+    private static final Map<Item, Item> ITEM_TRANSFORMS = Map.of(
+            Items.CARROT, Items.GOLDEN_CARROT,
+            Items.APPLE,  Items.GOLDEN_APPLE
+    );
+
     /**
-     * Makes the given player "golden" for durationMs milliseconds.
-     * Immediately replaces non-exempt items in both hands with gold ingots.
+     * Marks the player as golden for durationMs milliseconds and
+     * immediately applies the first hand-item transformation.
      */
     public static void makeGolden(ServerPlayer player, long durationMs) {
         goldenPlayers.put(player.getUUID(), System.currentTimeMillis() + durationMs);
@@ -56,11 +63,16 @@ public class GoldenPlayerHandler {
         replaceHandItem(player, InteractionHand.OFF_HAND);
     }
 
+    /**
+     * Replaces a non-exempt hand item with its golden equivalent.
+     * Carrot → Golden Carrot, Apple → Golden Apple, everything else → Gold Ingot.
+     * Stack count is preserved.
+     */
     private static void replaceHandItem(ServerPlayer player, InteractionHand hand) {
         ItemStack stack = player.getItemInHand(hand);
-        if (!stack.isEmpty() && !EXEMPT_ITEMS.contains(stack.getItem())) {
-            player.setItemInHand(hand, new ItemStack(Items.GOLD_INGOT, stack.getCount()));
-        }
+        if (stack.isEmpty() || EXEMPT_ITEMS.contains(stack.getItem())) return;
+        Item result = ITEM_TRANSFORMS.getOrDefault(stack.getItem(), Items.GOLD_INGOT);
+        player.setItemInHand(hand, new ItemStack(result, stack.getCount()));
     }
 
     public static boolean isGolden(UUID uuid) {
@@ -73,21 +85,26 @@ public class GoldenPlayerHandler {
         return true;
     }
 
-    // ── Gold trail ────────────────────────────────────────────────────────────
+    // ── Hand item replacement (continuous) + gold trail ───────────────────────
 
-    /** Every 4 ticks, turn the block under the golden player into gold. */
     @SubscribeEvent
     public void onPlayerTick(TickEvent.PlayerTickEvent event) {
         if (event.phase != TickEvent.Phase.END) return;
         if (!(event.player instanceof ServerPlayer player)) return;
         if (!isGolden(player.getUUID())) return;
-        if (player.tickCount % 4 != 0) return;
 
-        BlockPos below = player.blockPosition().below();
-        ServerLevel level = player.serverLevel();
-        BlockState state = level.getBlockState(below);
-        if (!state.isAir() && !state.is(Blocks.WATER) && !state.is(Blocks.GOLD_BLOCK)) {
-            level.setBlock(below, Blocks.GOLD_BLOCK.defaultBlockState(), 3);
+        // Continuously transform hand items on every tick
+        replaceHandItem(player, InteractionHand.MAIN_HAND);
+        replaceHandItem(player, InteractionHand.OFF_HAND);
+
+        // Gold trail every 4 ticks
+        if (player.tickCount % 4 == 0) {
+            BlockPos below = player.blockPosition().below();
+            ServerLevel level = player.serverLevel();
+            BlockState state = level.getBlockState(below);
+            if (!state.isAir() && !state.is(Blocks.WATER) && !state.is(Blocks.GOLD_BLOCK)) {
+                level.setBlock(below, Blocks.GOLD_BLOCK.defaultBlockState(), 3);
+            }
         }
     }
 
