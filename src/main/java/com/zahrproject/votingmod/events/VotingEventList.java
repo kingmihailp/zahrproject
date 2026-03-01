@@ -649,7 +649,7 @@ public class VotingEventList {
                         rabbit.moveTo(pos.getX() + ox, pos.getY(), pos.getZ() + oz, 0, 0);
                         rabbit.finalizeSpawn(level, level.getCurrentDifficultyAt(pos),
                                 MobSpawnType.EVENT, null, null);
-                        rabbit.setRabbitType(99); // 99 = killer bunny
+                        rabbit.setVariant(Rabbit.Variant.THE_KILLER_BUNNY);
                         level.addFreshEntity(rabbit);
                     }
                     broadcast(server, "Кролик-убийца появился рядом с игроками! СПАСАЙТЕСЬ!");
