@@ -3,6 +3,7 @@ package com.zahrproject.votingmod.handler;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -53,6 +54,14 @@ public class GoldenPlayerHandler {
             Items.APPLE,  Items.GOLDEN_APPLE
     );
 
+    /** Any non-golden armor in these slots is replaced with the golden equivalent. */
+    private static final Map<EquipmentSlot, Item> ARMOR_TRANSFORMS = Map.of(
+            EquipmentSlot.HEAD,  Items.GOLDEN_HELMET,
+            EquipmentSlot.CHEST, Items.GOLDEN_CHESTPLATE,
+            EquipmentSlot.LEGS,  Items.GOLDEN_LEGGINGS,
+            EquipmentSlot.FEET,  Items.GOLDEN_BOOTS
+    );
+
     /**
      * Marks the player as golden for durationMs milliseconds and
      * immediately applies the first hand-item transformation.
@@ -75,6 +84,12 @@ public class GoldenPlayerHandler {
         player.setItemInHand(hand, new ItemStack(result, stack.getCount()));
     }
 
+    private static void replaceArmorItem(ServerPlayer player, EquipmentSlot slot, Item golden) {
+        ItemStack stack = player.getItemBySlot(slot);
+        if (stack.isEmpty() || stack.getItem() == golden) return;
+        player.setItemSlot(slot, new ItemStack(golden));
+    }
+
     public static boolean isGolden(UUID uuid) {
         Long expiry = goldenPlayers.get(uuid);
         if (expiry == null) return false;
@@ -93,9 +108,12 @@ public class GoldenPlayerHandler {
         if (!(event.player instanceof ServerPlayer player)) return;
         if (!isGolden(player.getUUID())) return;
 
-        // Continuously transform hand items on every tick
+        // Continuously transform hand items and armor on every tick
         replaceHandItem(player, InteractionHand.MAIN_HAND);
         replaceHandItem(player, InteractionHand.OFF_HAND);
+        for (Map.Entry<EquipmentSlot, Item> entry : ARMOR_TRANSFORMS.entrySet()) {
+            replaceArmorItem(player, entry.getKey(), entry.getValue());
+        }
 
         // Gold trail every 4 ticks
         if (player.tickCount % 4 == 0) {
