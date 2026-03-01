@@ -7,6 +7,7 @@ import com.zahrproject.votingmod.command.VotingCommand;
 import com.zahrproject.votingmod.enchantments.ModEnchantments;
 import com.zahrproject.votingmod.events.ChildEventManager;
 import com.zahrproject.votingmod.handler.ForgeEventHandler;
+import com.zahrproject.votingmod.handler.GoldenPlayerHandler;
 import com.zahrproject.votingmod.handler.SkateboardHandler;
 import com.zahrproject.votingmod.network.ModNetwork;
 import net.minecraftforge.common.MinecraftForge;
@@ -34,6 +35,7 @@ public class VotingMod {
         ModEnchantments.ENCHANTMENTS.register(modEventBus);
         MinecraftForge.EVENT_BUS.register(this);
         MinecraftForge.EVENT_BUS.register(new ForgeEventHandler());
+        MinecraftForge.EVENT_BUS.register(new GoldenPlayerHandler());
         MinecraftForge.EVENT_BUS.register(new SkateboardHandler());
         MinecraftForge.EVENT_BUS.register(ChildEventManager.class);
         LOGGER.info("[VotingMod] Mod initialized!");

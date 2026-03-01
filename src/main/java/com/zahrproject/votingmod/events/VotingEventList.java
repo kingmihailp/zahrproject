@@ -1,6 +1,7 @@
 package com.zahrproject.votingmod.events;
 
 import com.zahrproject.votingmod.VotingManager;
+import com.zahrproject.votingmod.handler.GoldenPlayerHandler;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -826,6 +827,18 @@ public class VotingEventList {
                     long newInterval = Math.max(20, vm.getIntervalSeconds() - 20);
                     vm.setInterval(newInterval);
                     broadcast(server, "Больше голосований! Интервал сокращён до " + newInterval + " сек.");
+                }
+        ));
+
+        // ── Special: golden player ────────────────────────────────────────────
+
+        events.add(new VotingEvent(
+                "Прикосновение Мидаса",
+                server -> {
+                    for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                        GoldenPlayerHandler.makeGolden(player, 2 * 60 * 1000L);
+                    }
+                    broadcast(server, "Прикосновение Мидаса! Все игроки превратились в золотых на 2 минуты!");
                 }
         ));
 
