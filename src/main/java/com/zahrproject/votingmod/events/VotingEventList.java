@@ -1,5 +1,6 @@
 package com.zahrproject.votingmod.events;
 
+import com.zahrproject.votingmod.VotingManager;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -796,6 +797,35 @@ public class VotingEventList {
                         level.addFreshEntity(creeper);
                     }
                     broadcast(server, "Взрывной характер! Заряженные криперы спавнятся рядом с игроками!");
+                }
+        ));
+
+        // ── Special: random hoe ───────────────────────────────────────────────
+
+        events.add(new VotingEvent(
+                "Заявка на мотыгу",
+                server -> {
+                    List<Item> hoes = List.of(
+                            Items.WOODEN_HOE, Items.STONE_HOE, Items.IRON_HOE,
+                            Items.GOLDEN_HOE, Items.DIAMOND_HOE, Items.NETHERITE_HOE);
+                    Random rng = new Random();
+                    for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                        Item hoe = hoes.get(rng.nextInt(hoes.size()));
+                        player.addItem(new ItemStack(hoe));
+                    }
+                    broadcast(server, "Заявка на мотыгу! Каждый игрок получил случайную мотыгу!");
+                }
+        ));
+
+        // ── Special: shorten vote interval ────────────────────────────────────
+
+        events.add(new VotingEvent(
+                "Больше голосований",
+                server -> {
+                    VotingManager vm = VotingManager.getInstance();
+                    long newInterval = Math.max(20, vm.getIntervalSeconds() - 20);
+                    vm.setInterval(newInterval);
+                    broadcast(server, "Больше голосований! Интервал сокращён до " + newInterval + " сек.");
                 }
         ));
 
