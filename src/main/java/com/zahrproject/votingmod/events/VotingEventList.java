@@ -23,7 +23,11 @@ import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.MobCategory;
 import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.entity.animal.Rabbit;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.world.entity.item.FallingBlockEntity;
 import net.minecraft.world.entity.item.PrimedTnt;
+import net.minecraft.world.entity.projectile.FireworkRocketEntity;
 import net.minecraft.world.entity.monster.Creeper;
 import net.minecraft.world.entity.monster.Zombie;
 import com.zahrproject.votingmod.enchantments.ModEnchantments;
@@ -699,6 +703,65 @@ public class VotingEventList {
                                 "§6[Голосование] §eТвой предмет получил чар: " + enchantName + "!"));
                     }
                     broadcast(server, "Каждый игрок получил случайный чар на один из своих предметов!");
+                }
+        ));
+
+        // ── Special: pyrotechnics ──────────────────────────────────────────────
+
+        events.add(new VotingEvent(
+                "Пиротехника",
+                server -> {
+                    for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                        ServerLevel level = player.serverLevel();
+                        BlockPos pos = player.blockPosition();
+
+                        // Строим фейерверк: полёт 8, большой шар, мерцание, след
+                        ItemStack fireworkItem = new ItemStack(Items.FIREWORK_ROCKET);
+                        CompoundTag tag = fireworkItem.getOrCreateTag();
+                        CompoundTag fireworksTag = new CompoundTag();
+                        fireworksTag.putByte("Flight", (byte) 8);
+                        ListTag explosionsList = new ListTag();
+                        CompoundTag explosionTag = new CompoundTag();
+                        explosionTag.putByte("Type", (byte) 1); // Large Ball
+                        explosionTag.putBoolean("Flicker", true);
+                        explosionTag.putBoolean("Trail", true);
+                        explosionTag.putIntArray("Colors",
+                                new int[]{0xFF0000, 0xFFFF00, 0x00FFFF});
+                        explosionsList.add(explosionTag);
+                        fireworksTag.put("Explosions", explosionsList);
+                        tag.put("Fireworks", fireworksTag);
+
+                        // Запускаем игрока вверх
+                        player.setDeltaMovement(
+                                player.getDeltaMovement().x,
+                                4.0,
+                                player.getDeltaMovement().z);
+
+                        // Спавним фейерверк у игрока
+                        FireworkRocketEntity firework = new FireworkRocketEntity(level,
+                                pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5,
+                                fireworkItem);
+                        level.addFreshEntity(firework);
+                    }
+                    broadcast(server, "ПИРОТЕХНИКА! Все игроки улетели в небо!");
+                }
+        ));
+
+        // ── Special: anvil drop ───────────────────────────────────────────────
+
+        events.add(new VotingEvent(
+                "Тяжёлая дума",
+                server -> {
+                    for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                        ServerLevel level = player.serverLevel();
+                        BlockPos pos = player.blockPosition();
+                        FallingBlockEntity anvil = new FallingBlockEntity(level,
+                                pos.getX() + 0.5, pos.getY() + 15, pos.getZ() + 0.5,
+                                Blocks.ANVIL.defaultBlockState());
+                        anvil.dropItem = false;
+                        level.addFreshEntity(anvil);
+                    }
+                    broadcast(server, "Тяжёлая дума! Наковальни падают на игроков!");
                 }
         ));
 
