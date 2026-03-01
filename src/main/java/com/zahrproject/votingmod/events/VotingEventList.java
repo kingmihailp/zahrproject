@@ -821,9 +821,11 @@ public class VotingEventList {
         events.add(new VotingEvent(
                 "Прикосновение Мидаса",
                 server -> {
+                    long durationMs = 2 * 60 * 1000L;
                     for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-                        GoldenPlayerHandler.makeGolden(player, 2 * 60 * 1000L);
+                        GoldenPlayerHandler.makeGolden(player, durationMs);
                     }
+                    GoldenPlayerHandler.syncToAll(server, durationMs);
                     broadcast(server, "Прикосновение Мидаса! Все игроки превратились в золотых на 2 минуты!");
                 }
         ));

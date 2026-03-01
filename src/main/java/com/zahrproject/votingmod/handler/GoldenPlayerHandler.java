@@ -1,6 +1,9 @@
 package com.zahrproject.votingmod.handler;
 
+import com.zahrproject.votingmod.network.ModNetwork;
+import com.zahrproject.votingmod.network.SyncGoldenStatePacket;
 import net.minecraft.core.BlockPos;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -15,19 +18,47 @@ import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.event.level.BlockEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.network.PacketDistributor;
 
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 public class GoldenPlayerHandler {
 
-    /** UUID → expiry timestamp in milliseconds */
+    // ── Server-side state ─────────────────────────────────────────────────────
+
+    /** UUID → absolute expiry timestamp (ms). Populated on the server only. */
     private static final Map<UUID, Long> goldenPlayers = new ConcurrentHashMap<>();
 
     /** NBT key used to persist the expiry timestamp in the player's data. */
     private static final String NBT_KEY = "votingmod_midas_expiry";
+
+    /** Scheduler used to send the post-expiry sync packet to clients. */
+    private static final ScheduledExecutorService SCHEDULER =
+            Executors.newSingleThreadScheduledExecutor(r -> {
+                Thread t = new Thread(r, "VotingMod-GoldenRevert");
+                t.setDaemon(true);
+                return t;
+            });
+
+    // ── Client-side state ─────────────────────────────────────────────────────
+
+    /**
+     * Set of UUIDs that the CLIENT knows are currently golden.
+     * Populated by {@link SyncGoldenStatePacket} received from the server.
+     * This is what {@link com.zahrproject.votingmod.client.GoldenOverlayLayer}
+     * reads — it works correctly on every client, including those connecting
+     * to a remote dedicated server.
+     */
+    private static final Set<UUID> goldenPlayersClient = ConcurrentHashMap.newKeySet();
+
+    // ── Item transform tables ─────────────────────────────────────────────────
 
     /** Items that are already "golden" — never replaced. */
     private static final Set<Item> EXEMPT_ITEMS = Set.of(
@@ -66,73 +97,98 @@ public class GoldenPlayerHandler {
             EquipmentSlot.FEET,  Items.GOLDEN_BOOTS
     );
 
+    // ── Public API ────────────────────────────────────────────────────────────
+
     /**
      * Marks the player as golden for durationMs milliseconds and
-     * immediately applies the first hand-item transformation.
+     * immediately applies the first hand/armor transformation.
+     * Call {@link #syncToAll} once after making all desired players golden.
      */
     public static void makeGolden(ServerPlayer player, long durationMs) {
         goldenPlayers.put(player.getUUID(), System.currentTimeMillis() + durationMs);
         replaceHandItem(player, InteractionHand.MAIN_HAND);
         replaceHandItem(player, InteractionHand.OFF_HAND);
+        for (Map.Entry<EquipmentSlot, Item> e : ARMOR_TRANSFORMS.entrySet()) {
+            replaceArmorItem(player, e.getKey(), e.getValue());
+        }
     }
 
     /**
-     * Replaces a non-exempt hand item with its golden equivalent.
-     * Carrot → Golden Carrot, Apple → Golden Apple, everything else → Gold Ingot.
-     * Stack count is preserved.
+     * Sends the current set of golden UUIDs to every online client and
+     * schedules a follow-up sync after {@code durationMs} so the overlay
+     * disappears automatically when the effect expires.
      */
-    private static void replaceHandItem(ServerPlayer player, InteractionHand hand) {
-        ItemStack stack = player.getItemInHand(hand);
-        if (stack.isEmpty() || EXEMPT_ITEMS.contains(stack.getItem())) return;
-        Item result = ITEM_TRANSFORMS.getOrDefault(stack.getItem(), Items.GOLD_INGOT);
-        player.setItemInHand(hand, new ItemStack(result, stack.getCount()));
+    public static void syncToAll(MinecraftServer server, long durationMs) {
+        sendSync(server);
+        SCHEDULER.schedule(() -> server.execute(() -> sendSync(server)),
+                durationMs, TimeUnit.MILLISECONDS);
     }
 
-    private static void replaceArmorItem(ServerPlayer player, EquipmentSlot slot, Item golden) {
-        ItemStack stack = player.getItemBySlot(slot);
-        if (stack.isEmpty() || stack.getItem() == golden) return;
-        player.setItemSlot(slot, new ItemStack(golden));
+    /** Sends the current golden-UUID set to a single (just-logged-in) player. */
+    public static void syncToPlayer(ServerPlayer player) {
+        Set<UUID> active = buildActiveSet();
+        ModNetwork.CHANNEL.send(
+                PacketDistributor.PLAYER.with(() -> player),
+                new SyncGoldenStatePacket(active));
     }
 
+    /**
+     * Called by {@link SyncGoldenStatePacket} on the CLIENT thread.
+     * Replaces the client's knowledge of who is currently golden.
+     */
+    public static void setGoldenPlayers(Set<UUID> uuids) {
+        goldenPlayersClient.clear();
+        goldenPlayersClient.addAll(uuids);
+    }
+
+    /**
+     * Returns true if the given UUID belongs to a golden player.
+     * Checks the server-side expiry map first; falls back to the
+     * client-side set (populated via sync packet on remote clients).
+     */
     public static boolean isGolden(UUID uuid) {
         Long expiry = goldenPlayers.get(uuid);
-        if (expiry == null) return false;
-        if (System.currentTimeMillis() >= expiry) {
+        if (expiry != null) {
+            if (System.currentTimeMillis() < expiry) return true;
             goldenPlayers.remove(uuid);
-            return false;
         }
-        return true;
+        return goldenPlayersClient.contains(uuid);
     }
 
     // ── Login / logout persistence ────────────────────────────────────────────
 
-    /**
-     * On login: if the player was golden when the server stopped (or when they
-     * logged out), restore the effect for the remaining duration.
-     * Within the same running session the map already contains their entry, so
-     * nothing extra is needed.
-     */
     @SubscribeEvent
     public void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event) {
         if (!(event.getEntity() instanceof ServerPlayer player)) return;
         UUID uuid = player.getUUID();
-        if (isGolden(uuid)) return; // same session, already tracked
 
+        if (isGolden(uuid)) {
+            // Same session — already in the server map; just sync this client.
+            syncToPlayer(player);
+            return;
+        }
+
+        // Server restart — restore from persistent player NBT.
         long savedExpiry = player.getPersistentData().getLong(NBT_KEY);
-        if (savedExpiry > System.currentTimeMillis()) {
+        long now = System.currentTimeMillis();
+        if (savedExpiry > now) {
             goldenPlayers.put(uuid, savedExpiry);
             replaceHandItem(player, InteractionHand.MAIN_HAND);
             replaceHandItem(player, InteractionHand.OFF_HAND);
             for (Map.Entry<EquipmentSlot, Item> e : ARMOR_TRANSFORMS.entrySet()) {
                 replaceArmorItem(player, e.getKey(), e.getValue());
             }
+            syncToPlayer(player);
+            long remainingMs = savedExpiry - now;
+            MinecraftServer server = player.getServer();
+            if (server != null) {
+                SCHEDULER.schedule(
+                        () -> server.execute(() -> sendSync(server)),
+                        remainingMs, TimeUnit.MILLISECONDS);
+            }
         }
     }
 
-    /**
-     * On logout: write the remaining expiry into the player's persistent NBT
-     * so the effect can be restored after a server restart.
-     */
     @SubscribeEvent
     public void onPlayerLogout(PlayerEvent.PlayerLoggedOutEvent event) {
         if (!(event.getEntity() instanceof ServerPlayer player)) return;
@@ -153,14 +209,12 @@ public class GoldenPlayerHandler {
         if (!(event.player instanceof ServerPlayer player)) return;
         if (!isGolden(player.getUUID())) return;
 
-        // Continuously transform hand items and armor on every tick
         replaceHandItem(player, InteractionHand.MAIN_HAND);
         replaceHandItem(player, InteractionHand.OFF_HAND);
-        for (Map.Entry<EquipmentSlot, Item> entry : ARMOR_TRANSFORMS.entrySet()) {
-            replaceArmorItem(player, entry.getKey(), entry.getValue());
+        for (Map.Entry<EquipmentSlot, Item> e : ARMOR_TRANSFORMS.entrySet()) {
+            replaceArmorItem(player, e.getKey(), e.getValue());
         }
 
-        // Gold trail every 4 ticks
         if (player.tickCount % 4 == 0) {
             BlockPos below = player.blockPosition().below();
             ServerLevel level = player.serverLevel();
@@ -190,5 +244,36 @@ public class GoldenPlayerHandler {
         if (!isGolden(player.getUUID())) return;
         event.setCanceled(true);
         player.serverLevel().setBlock(event.getPos(), Blocks.GOLD_BLOCK.defaultBlockState(), 3);
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private static void replaceHandItem(ServerPlayer player, InteractionHand hand) {
+        ItemStack stack = player.getItemInHand(hand);
+        if (stack.isEmpty() || EXEMPT_ITEMS.contains(stack.getItem())) return;
+        Item result = ITEM_TRANSFORMS.getOrDefault(stack.getItem(), Items.GOLD_INGOT);
+        player.setItemInHand(hand, new ItemStack(result, stack.getCount()));
+    }
+
+    private static void replaceArmorItem(ServerPlayer player, EquipmentSlot slot, Item golden) {
+        ItemStack stack = player.getItemBySlot(slot);
+        if (stack.isEmpty() || stack.getItem() == golden) return;
+        player.setItemSlot(slot, new ItemStack(golden));
+    }
+
+    private static Set<UUID> buildActiveSet() {
+        long now = System.currentTimeMillis();
+        Set<UUID> active = new HashSet<>();
+        for (Map.Entry<UUID, Long> e : goldenPlayers.entrySet()) {
+            if (e.getValue() > now) active.add(e.getKey());
+        }
+        return active;
+    }
+
+    private static void sendSync(MinecraftServer server) {
+        SyncGoldenStatePacket pkt = new SyncGoldenStatePacket(buildActiveSet());
+        for (ServerPlayer p : server.getPlayerList().getPlayers()) {
+            ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), pkt);
+        }
     }
 }

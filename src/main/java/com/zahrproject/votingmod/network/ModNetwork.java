@@ -49,5 +49,12 @@ public class ModNetwork {
                 SyncChildStatePacket::encode,
                 SyncChildStatePacket::decode,
                 SyncChildStatePacket::handle);
+
+        // S2C: Server syncs the set of "golden" player UUIDs to all clients
+        CHANNEL.registerMessage(id++,
+                SyncGoldenStatePacket.class,
+                SyncGoldenStatePacket::encode,
+                SyncGoldenStatePacket::decode,
+                SyncGoldenStatePacket::handle);
     }
 }
