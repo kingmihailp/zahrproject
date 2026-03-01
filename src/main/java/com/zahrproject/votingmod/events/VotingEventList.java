@@ -756,7 +756,7 @@ public class VotingEventList {
                         ServerLevel level = player.serverLevel();
                         BlockPos pos = player.blockPosition();
                         FallingBlockEntity anvil = new FallingBlockEntity(level,
-                                pos.getX() + 0.5, pos.getY() + 15, pos.getZ() + 0.5,
+                                pos.getX() + 0.5, pos.getY() + 15.0, pos.getZ() + 0.5,
                                 Blocks.ANVIL.defaultBlockState());
                         anvil.dropItem = false;
                         level.addFreshEntity(anvil);
