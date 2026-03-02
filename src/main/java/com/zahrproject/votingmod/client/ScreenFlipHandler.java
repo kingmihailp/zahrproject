@@ -23,7 +23,7 @@ public class ScreenFlipHandler {
     @SubscribeEvent
     public static void onCameraAngles(ViewportEvent.ComputeCameraAngles event) {
         if (flipped) {
-            event.setRoll(event.getRoll() + 180.0);
+            event.setRoll(event.getRoll() + 180.0f);
         }
     }
 }
