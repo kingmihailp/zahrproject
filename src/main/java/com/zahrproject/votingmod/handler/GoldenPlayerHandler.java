@@ -100,6 +100,9 @@ public class GoldenPlayerHandler {
 
     // ── Public API ────────────────────────────────────────────────────────────
 
+    /** Total duration of the current (or last) Midas event in ms. */
+    private static volatile long goldenEventDurationMs = 0;
+
     /**
      * Marks the player as golden for durationMs milliseconds and
      * immediately applies the first hand/armor transformation.
@@ -120,15 +123,16 @@ public class GoldenPlayerHandler {
      * disappears automatically when the effect expires.
      */
     public static void syncToAll(MinecraftServer server, long durationMs) {
+        goldenEventDurationMs = durationMs;
         sendSync(server);
         // Start HUD timer on all clients
-        EventTimerPacket timerStart = new EventTimerPacket("Прикосновение Мидаса", durationMs);
+        EventTimerPacket timerStart = new EventTimerPacket("Прикосновение Мидаса", durationMs, durationMs);
         for (ServerPlayer p : server.getPlayerList().getPlayers())
             ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), timerStart);
         // After expiry: sync golden state and remove HUD timer
         SCHEDULER.schedule(() -> server.execute(() -> {
             sendSync(server);
-            EventTimerPacket timerEnd = new EventTimerPacket("Прикосновение Мидаса", 0);
+            EventTimerPacket timerEnd = new EventTimerPacket("Прикосновение Мидаса", 0, 0);
             for (ServerPlayer p : server.getPlayerList().getPlayers())
                 ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), timerEnd);
         }), durationMs, TimeUnit.MILLISECONDS);
@@ -172,16 +176,19 @@ public class GoldenPlayerHandler {
         if (!(event.getEntity() instanceof ServerPlayer player)) return;
         UUID uuid = player.getUUID();
 
+        // Always sync the golden-player set so the client overlay is up to date.
+        // This handles the case where the effect expired while the player was
+        // offline (the client's goldenPlayersClient set was never cleared).
+        syncToPlayer(player);
+
         if (isGolden(uuid)) {
-            // Same session — already in the server map; just sync this client.
-            syncToPlayer(player);
-            // Re-send HUD timer with remaining time
+            // Same session — already in the server map. Re-send HUD timer.
             Long expiry = goldenPlayers.get(uuid);
             if (expiry != null) {
                 long remaining = expiry - System.currentTimeMillis();
                 if (remaining > 0) {
                     ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
-                            new EventTimerPacket("Прикосновение Мидаса", remaining));
+                            new EventTimerPacket("Прикосновение Мидаса", remaining, goldenEventDurationMs));
                 }
             }
             return;
@@ -199,9 +206,9 @@ public class GoldenPlayerHandler {
             }
             syncToPlayer(player);
             long remainingMs = savedExpiry - now;
-            // Re-send HUD timer
+            // Re-send HUD timer with original total duration for correct bar fraction
             ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
-                    new EventTimerPacket("Прикосновение Мидаса", remainingMs));
+                    new EventTimerPacket("Прикосновение Мидаса", remainingMs, goldenEventDurationMs));
             MinecraftServer server = player.getServer();
             if (server != null) {
                 SCHEDULER.schedule(
@@ -209,6 +216,8 @@ public class GoldenPlayerHandler {
                         remainingMs, TimeUnit.MILLISECONDS);
             }
         }
+        // else: effect expired while offline → syncToPlayer() already sent the
+        // correct (empty/partial) set above, clearing the golden overlay.
     }
 
     @SubscribeEvent

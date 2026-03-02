@@ -41,6 +41,9 @@ public class ChildEventManager {
     /** UUID → absolute expiry timestamp (ms). Server-side only. */
     private static final Map<UUID, Long> childExpiry = new ConcurrentHashMap<>();
 
+    /** Total duration of the current (or last) event in ms. Used for HUD bar fraction on reconnect. */
+    private static volatile long childEventDurationMs = 0;
+
     /** NBT key for the expiry timestamp. */
     private static final String NBT_KEY        = "votingmod_child_expiry";
     /** NBT key that marks we reduced this player's max health. */
@@ -69,7 +72,10 @@ public class ChildEventManager {
         Set<UUID> activated = new HashSet<>();
         for (ServerPlayer p : players) activated.add(p.getUUID());
 
-        long expiry = System.currentTimeMillis() + durationSeconds * 1000L;
+        long durationMs = durationSeconds * 1000L;
+        childEventDurationMs = durationMs;
+
+        long expiry = System.currentTimeMillis() + durationMs;
         childPlayers.addAll(activated);
         for (UUID uuid : activated) childExpiry.put(uuid, expiry);
 
@@ -82,8 +88,7 @@ public class ChildEventManager {
         syncToAll(server);
 
         // Start HUD timer on all clients
-        long durationMs = durationSeconds * 1000L;
-        EventTimerPacket timerStart = new EventTimerPacket(TIMER_NAME, durationMs);
+        EventTimerPacket timerStart = new EventTimerPacket(TIMER_NAME, durationMs, durationMs);
         for (ServerPlayer p : server.getPlayerList().getPlayers())
             ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), timerStart);
 
@@ -103,7 +108,7 @@ public class ChildEventManager {
                     }
                 }
                 syncToAll(server);
-                EventTimerPacket timerEnd = new EventTimerPacket(TIMER_NAME, 0);
+                EventTimerPacket timerEnd = new EventTimerPacket(TIMER_NAME, 0, 0);
                 for (ServerPlayer p : server.getPlayerList().getPlayers())
                     ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), timerEnd);
                 LOGGER.info("[VotingMod] Players reverted from child state.");
@@ -156,20 +161,20 @@ public class ChildEventManager {
         UUID uuid = player.getUUID();
 
         if (childPlayers.contains(uuid)) {
-            // Same session — re-sync this client and restore health in case it was reset.
-            SyncChildStatePacket pkt = new SyncChildStatePacket(new HashSet<>(childPlayers));
-            ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), pkt);
+            // Same session — effect still active server-side.
+            // Re-sync this client and re-apply health in case it was reset on login.
+            syncToPlayer(player);
             server.execute(() -> {
                 player.refreshDimensions();
                 applyChildHealth(player);
             });
-            // Re-send HUD timer with remaining time
+            // Re-send HUD timer with remaining time and original total duration.
             Long expiry = childExpiry.get(uuid);
             if (expiry != null) {
                 long remaining = expiry - System.currentTimeMillis();
                 if (remaining > 0) {
                     ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
-                            new EventTimerPacket(TIMER_NAME, remaining));
+                            new EventTimerPacket(TIMER_NAME, remaining, childEventDurationMs));
                 }
             }
             return;
@@ -177,6 +182,11 @@ public class ChildEventManager {
 
         long savedExpiry = player.getPersistentData().getLong(NBT_KEY);
         long now = System.currentTimeMillis();
+
+        // Always sync the child-player set so the client is up to date.
+        // This handles the case where the effect expired while the player was
+        // offline (the client's set was never cleared via SyncChildStatePacket).
+        syncToPlayer(player);
 
         if (savedExpiry > now) {
             // Effect still active — restore child state after server restart.
@@ -186,11 +196,11 @@ public class ChildEventManager {
             server.execute(() -> {
                 player.refreshDimensions();
                 applyChildHealth(player);
-                syncToAll(server);
+                syncToAll(server);  // re-broadcast updated set
             });
             // Re-send HUD timer
             ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
-                    new EventTimerPacket(TIMER_NAME, remainingMs));
+                    new EventTimerPacket(TIMER_NAME, remainingMs, childEventDurationMs));
             SCHEDULER.schedule(() -> {
                 childPlayers.remove(uuid);
                 childExpiry.remove(uuid);
@@ -204,7 +214,7 @@ public class ChildEventManager {
                     ServerPlayer p2 = server.getPlayerList().getPlayer(uuid);
                     if (p2 != null)
                         ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p2),
-                                new EventTimerPacket(TIMER_NAME, 0));
+                                new EventTimerPacket(TIMER_NAME, 0, 0));
                 });
             }, remainingMs, TimeUnit.MILLISECONDS);
         } else if (player.getPersistentData().getBoolean(NBT_KEY_HEALTH)) {
@@ -249,5 +259,10 @@ public class ChildEventManager {
         for (ServerPlayer p : server.getPlayerList().getPlayers()) {
             ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), packet);
         }
+    }
+
+    private static void syncToPlayer(ServerPlayer player) {
+        ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
+                new SyncChildStatePacket(new HashSet<>(childPlayers)));
     }
 }

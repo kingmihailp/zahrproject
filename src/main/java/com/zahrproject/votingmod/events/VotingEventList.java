@@ -851,9 +851,9 @@ public class VotingEventList {
                 "Все вверх дном",
                 server -> {
                     long durationMs = 3 * 60 * 1000L;
-                    FlipScreenTracker.setActive(System.currentTimeMillis() + durationMs);
-                    FlipScreenPacket pktOn = new FlipScreenPacket(true);
-                    EventTimerPacket timerStart = new EventTimerPacket("Все вверх дном", durationMs);
+                    FlipScreenTracker.setActive(System.currentTimeMillis() + durationMs, durationMs);
+                    FlipScreenPacket pktOn    = new FlipScreenPacket(true);
+                    EventTimerPacket timerStart = new EventTimerPacket("Все вверх дном", durationMs, durationMs);
                     for (ServerPlayer p : server.getPlayerList().getPlayers()) {
                         ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), pktOn);
                         ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), timerStart);
@@ -861,8 +861,8 @@ public class VotingEventList {
                     broadcast(server, "Все вверх дном! Экраны всех игроков перевёрнуты на 3 минуты!");
                     FLIP_SCHEDULER.schedule(() -> server.execute(() -> {
                         FlipScreenTracker.clear();
-                        FlipScreenPacket pktOff = new FlipScreenPacket(false);
-                        EventTimerPacket timerEnd = new EventTimerPacket("Все вверх дном", 0);
+                        FlipScreenPacket pktOff  = new FlipScreenPacket(false);
+                        EventTimerPacket timerEnd = new EventTimerPacket("Все вверх дном", 0, 0);
                         for (ServerPlayer p : server.getPlayerList().getPlayers()) {
                             ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), pktOff);
                             ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), timerEnd);
