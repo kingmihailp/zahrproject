@@ -2,6 +2,9 @@ package com.zahrproject.votingmod.events;
 
 import com.zahrproject.votingmod.VotingManager;
 import com.zahrproject.votingmod.handler.GoldenPlayerHandler;
+import com.zahrproject.votingmod.network.FlipScreenPacket;
+import com.zahrproject.votingmod.network.ModNetwork;
+import net.minecraftforge.network.PacketDistributor;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -827,6 +830,28 @@ public class VotingEventList {
                     }
                     GoldenPlayerHandler.syncToAll(server, durationMs);
                     broadcast(server, "Прикосновение Мидаса! Все игроки превратились в золотых на 2 минуты!");
+                }
+        ));
+
+        // ── Special: flip screen ──────────────────────────────────────────────
+
+        events.add(new VotingEvent(
+                "Все вверх дном",
+                server -> {
+                    FlipScreenPacket pkt = new FlipScreenPacket(true);
+                    for (ServerPlayer p : server.getPlayerList().getPlayers())
+                        ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), pkt);
+                    broadcast(server, "Все вверх дном! Экраны всех игроков перевёрнуты!");
+                }
+        ));
+
+        events.add(new VotingEvent(
+                "Всё на своих местах",
+                server -> {
+                    FlipScreenPacket pkt = new FlipScreenPacket(false);
+                    for (ServerPlayer p : server.getPlayerList().getPlayers())
+                        ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), pkt);
+                    broadcast(server, "Всё на своих местах! Экраны игроков восстановлены!");
                 }
         ));
 

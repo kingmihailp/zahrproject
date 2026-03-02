@@ -3,6 +3,7 @@ package com.zahrproject.votingmod;
 import com.mojang.logging.LogUtils;
 import com.zahrproject.votingmod.client.ChildRenderHandler;
 import com.zahrproject.votingmod.client.GoldenOverlayLayer;
+import com.zahrproject.votingmod.client.ScreenFlipHandler;
 import com.zahrproject.votingmod.client.SkateboardRenderHandler;
 import com.zahrproject.votingmod.command.VotingCommand;
 import com.zahrproject.votingmod.enchantments.ModEnchantments;
@@ -51,6 +52,7 @@ public class VotingMod {
         event.enqueueWork(() -> {
             MinecraftForge.EVENT_BUS.register(ChildRenderHandler.class);
             MinecraftForge.EVENT_BUS.register(SkateboardRenderHandler.class);
+            MinecraftForge.EVENT_BUS.register(ScreenFlipHandler.class);
         });
         FMLJavaModLoadingContext.get().getModEventBus().addListener(GoldenOverlayLayer::onAddLayers);
         LOGGER.info("[VotingMod] Client setup complete.");

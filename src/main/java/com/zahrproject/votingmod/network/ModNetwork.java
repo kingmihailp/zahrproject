@@ -56,5 +56,12 @@ public class ModNetwork {
                 SyncGoldenStatePacket::encode,
                 SyncGoldenStatePacket::decode,
                 SyncGoldenStatePacket::handle);
+
+        // S2C: Server tells each client to flip or restore their screen
+        CHANNEL.registerMessage(id++,
+                FlipScreenPacket.class,
+                FlipScreenPacket::encode,
+                FlipScreenPacket::decode,
+                FlipScreenPacket::handle);
     }
 }
