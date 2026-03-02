@@ -63,5 +63,12 @@ public class ModNetwork {
                 FlipScreenPacket::encode,
                 FlipScreenPacket::decode,
                 FlipScreenPacket::handle);
+
+        // S2C: Server starts or removes a named event timer on the client HUD
+        CHANNEL.registerMessage(id++,
+                EventTimerPacket.class,
+                EventTimerPacket::encode,
+                EventTimerPacket::decode,
+                EventTimerPacket::handle);
     }
 }

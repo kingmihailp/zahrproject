@@ -1,5 +1,6 @@
 package com.zahrproject.votingmod.handler;
 
+import com.zahrproject.votingmod.network.EventTimerPacket;
 import com.zahrproject.votingmod.network.ModNetwork;
 import com.zahrproject.votingmod.network.SyncGoldenStatePacket;
 import net.minecraft.core.BlockPos;
@@ -120,8 +121,17 @@ public class GoldenPlayerHandler {
      */
     public static void syncToAll(MinecraftServer server, long durationMs) {
         sendSync(server);
-        SCHEDULER.schedule(() -> server.execute(() -> sendSync(server)),
-                durationMs, TimeUnit.MILLISECONDS);
+        // Start HUD timer on all clients
+        EventTimerPacket timerStart = new EventTimerPacket("Прикосновение Мидаса", durationMs);
+        for (ServerPlayer p : server.getPlayerList().getPlayers())
+            ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), timerStart);
+        // After expiry: sync golden state and remove HUD timer
+        SCHEDULER.schedule(() -> server.execute(() -> {
+            sendSync(server);
+            EventTimerPacket timerEnd = new EventTimerPacket("Прикосновение Мидаса", 0);
+            for (ServerPlayer p : server.getPlayerList().getPlayers())
+                ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), timerEnd);
+        }), durationMs, TimeUnit.MILLISECONDS);
     }
 
     /** Sends the current golden-UUID set to a single (just-logged-in) player. */

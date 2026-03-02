@@ -2,6 +2,7 @@ package com.zahrproject.votingmod.events;
 
 import com.zahrproject.votingmod.VotingManager;
 import com.zahrproject.votingmod.handler.GoldenPlayerHandler;
+import com.zahrproject.votingmod.network.EventTimerPacket;
 import com.zahrproject.votingmod.network.FlipScreenPacket;
 import com.zahrproject.votingmod.network.ModNetwork;
 import net.minecraftforge.network.PacketDistributor;
@@ -850,13 +851,19 @@ public class VotingEventList {
                 server -> {
                     long durationMs = 3 * 60 * 1000L;
                     FlipScreenPacket pktOn = new FlipScreenPacket(true);
-                    for (ServerPlayer p : server.getPlayerList().getPlayers())
+                    EventTimerPacket timerStart = new EventTimerPacket("Все вверх дном", durationMs);
+                    for (ServerPlayer p : server.getPlayerList().getPlayers()) {
                         ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), pktOn);
+                        ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), timerStart);
+                    }
                     broadcast(server, "Все вверх дном! Экраны всех игроков перевёрнуты на 3 минуты!");
                     FLIP_SCHEDULER.schedule(() -> server.execute(() -> {
                         FlipScreenPacket pktOff = new FlipScreenPacket(false);
-                        for (ServerPlayer p : server.getPlayerList().getPlayers())
+                        EventTimerPacket timerEnd = new EventTimerPacket("Все вверх дном", 0);
+                        for (ServerPlayer p : server.getPlayerList().getPlayers()) {
                             ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), pktOff);
+                            ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), timerEnd);
+                        }
                         broadcast(server, "Всё на своих местах! Экраны игроков восстановлены.");
                     }), durationMs, TimeUnit.MILLISECONDS);
                 }

@@ -1,6 +1,7 @@
 package com.zahrproject.votingmod.events;
 
 import com.mojang.logging.LogUtils;
+import com.zahrproject.votingmod.network.EventTimerPacket;
 import com.zahrproject.votingmod.network.ModNetwork;
 import com.zahrproject.votingmod.network.SyncChildStatePacket;
 import net.minecraft.server.MinecraftServer;
@@ -72,6 +73,12 @@ public class ChildEventManager {
 
         syncToAll(server);
 
+        // Notify clients to show the HUD timer
+        long durationMs = durationSeconds * 1000L;
+        EventTimerPacket timerStart = new EventTimerPacket("Превратить в детей", durationMs);
+        for (ServerPlayer p : server.getPlayerList().getPlayers())
+            ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), timerStart);
+
         LOGGER.info("[VotingMod] {} player(s) became children for {} seconds.",
                 activated.size(), durationSeconds);
 
@@ -85,6 +92,10 @@ public class ChildEventManager {
                     if (p != null) p.refreshDimensions();
                 }
                 syncToAll(server);
+                // Remove HUD timer
+                EventTimerPacket timerEnd = new EventTimerPacket("Превратить в детей", 0);
+                for (ServerPlayer p : server.getPlayerList().getPlayers())
+                    ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), timerEnd);
                 LOGGER.info("[VotingMod] Players reverted from child state.");
             });
         }, durationSeconds, TimeUnit.SECONDS);
