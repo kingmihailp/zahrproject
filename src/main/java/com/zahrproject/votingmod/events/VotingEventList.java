@@ -1,6 +1,7 @@
 package com.zahrproject.votingmod.events;
 
 import com.zahrproject.votingmod.VotingManager;
+import com.zahrproject.votingmod.handler.FlipScreenTracker;
 import com.zahrproject.votingmod.handler.GoldenPlayerHandler;
 import com.zahrproject.votingmod.network.EventTimerPacket;
 import com.zahrproject.votingmod.network.FlipScreenPacket;
@@ -479,10 +480,10 @@ public class VotingEventList {
         // ── Special: children ──────────────────────────────────────────────────
 
         events.add(new VotingEvent(
-                "Превратить всех игроков в детей на 1 минуту",
+                "Обратно в детство",
                 server -> {
                     ChildEventManager.activate(server, 8 * 60);
-                    broadcast(server, "Все игроки стали детьми! Ищите дыры в заборе!");
+                    broadcast(server, "Обратно в детство! Все игроки стали детьми на 8 минут!");
                 }
         ));
 
@@ -850,6 +851,7 @@ public class VotingEventList {
                 "Все вверх дном",
                 server -> {
                     long durationMs = 3 * 60 * 1000L;
+                    FlipScreenTracker.setActive(System.currentTimeMillis() + durationMs);
                     FlipScreenPacket pktOn = new FlipScreenPacket(true);
                     EventTimerPacket timerStart = new EventTimerPacket("Все вверх дном", durationMs);
                     for (ServerPlayer p : server.getPlayerList().getPlayers()) {
@@ -858,6 +860,7 @@ public class VotingEventList {
                     }
                     broadcast(server, "Все вверх дном! Экраны всех игроков перевёрнуты на 3 минуты!");
                     FLIP_SCHEDULER.schedule(() -> server.execute(() -> {
+                        FlipScreenTracker.clear();
                         FlipScreenPacket pktOff = new FlipScreenPacket(false);
                         EventTimerPacket timerEnd = new EventTimerPacket("Все вверх дном", 0);
                         for (ServerPlayer p : server.getPlayerList().getPlayers()) {

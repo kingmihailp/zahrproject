@@ -175,6 +175,15 @@ public class GoldenPlayerHandler {
         if (isGolden(uuid)) {
             // Same session — already in the server map; just sync this client.
             syncToPlayer(player);
+            // Re-send HUD timer with remaining time
+            Long expiry = goldenPlayers.get(uuid);
+            if (expiry != null) {
+                long remaining = expiry - System.currentTimeMillis();
+                if (remaining > 0) {
+                    ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
+                            new EventTimerPacket("Прикосновение Мидаса", remaining));
+                }
+            }
             return;
         }
 
@@ -190,6 +199,9 @@ public class GoldenPlayerHandler {
             }
             syncToPlayer(player);
             long remainingMs = savedExpiry - now;
+            // Re-send HUD timer
+            ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
+                    new EventTimerPacket("Прикосновение Мидаса", remainingMs));
             MinecraftServer server = player.getServer();
             if (server != null) {
                 SCHEDULER.schedule(

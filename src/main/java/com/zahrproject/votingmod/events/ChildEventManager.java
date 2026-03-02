@@ -7,6 +7,8 @@ import com.zahrproject.votingmod.network.SyncChildStatePacket;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.EntityDimensions;
+import net.minecraft.world.entity.ai.attributes.AttributeInstance;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.animal.Chicken;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Items;
@@ -21,12 +23,10 @@ import java.util.*;
 import java.util.concurrent.*;
 
 /**
- * Manages the "child" state for players:
+ * Manages the "Обратно в детство" (child) state for players:
  *  - Halves their bounding box so they fit through 1-block-high gaps.
+ *  - Reduces max health to 5 hearts (10 HP).
  *  - Allows them to ride chickens by right-clicking with wheat seeds.
- *
- * The state is synced to all clients via {@link SyncChildStatePacket} so
- * that {@link #onEntitySize} fires correctly on both sides.
  *
  * State persists across login/logout within the same server session and
  * across server restarts via {@code player.getPersistentData()}.
@@ -41,8 +41,13 @@ public class ChildEventManager {
     /** UUID → absolute expiry timestamp (ms). Server-side only. */
     private static final Map<UUID, Long> childExpiry = new ConcurrentHashMap<>();
 
-    /** NBT key used to persist the expiry timestamp in the player's data. */
-    private static final String NBT_KEY = "votingmod_child_expiry";
+    /** NBT key for the expiry timestamp. */
+    private static final String NBT_KEY        = "votingmod_child_expiry";
+    /** NBT key that marks we reduced this player's max health. */
+    private static final String NBT_KEY_HEALTH = "votingmod_child_health_reduced";
+
+    /** Voting-event name shown in timer HUD and packets. */
+    private static final String TIMER_NAME = "Обратно в детство";
 
     /** Scheduler for the revert timer. */
     private static final ScheduledExecutorService SCHEDULER =
@@ -68,14 +73,17 @@ public class ChildEventManager {
         childPlayers.addAll(activated);
         for (UUID uuid : activated) childExpiry.put(uuid, expiry);
 
-        // Refresh bounding boxes so the smaller hitbox takes effect immediately
-        for (ServerPlayer p : players) p.refreshDimensions();
+        // Apply smaller hitbox and reduced health
+        for (ServerPlayer p : players) {
+            p.refreshDimensions();
+            applyChildHealth(p);
+        }
 
         syncToAll(server);
 
-        // Notify clients to show the HUD timer
+        // Start HUD timer on all clients
         long durationMs = durationSeconds * 1000L;
-        EventTimerPacket timerStart = new EventTimerPacket("Превратить в детей", durationMs);
+        EventTimerPacket timerStart = new EventTimerPacket(TIMER_NAME, durationMs);
         for (ServerPlayer p : server.getPlayerList().getPlayers())
             ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), timerStart);
 
@@ -89,11 +97,13 @@ public class ChildEventManager {
             server.execute(() -> {
                 for (UUID uuid : activated) {
                     ServerPlayer p = server.getPlayerList().getPlayer(uuid);
-                    if (p != null) p.refreshDimensions();
+                    if (p != null) {
+                        p.refreshDimensions();
+                        revertChildHealth(p);
+                    }
                 }
                 syncToAll(server);
-                // Remove HUD timer
-                EventTimerPacket timerEnd = new EventTimerPacket("Превратить в детей", 0);
+                EventTimerPacket timerEnd = new EventTimerPacket(TIMER_NAME, 0);
                 for (ServerPlayer p : server.getPlayerList().getPlayers())
                     ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), timerEnd);
                 LOGGER.info("[VotingMod] Players reverted from child state.");
@@ -113,12 +123,6 @@ public class ChildEventManager {
 
     // ── Forge Events ──────────────────────────────────────────────────────────
 
-    /**
-     * Fires on BOTH sides whenever entity dimensions are queried.
-     * Halves width and height for child players.
-     * Normal player: 0.6 w × 1.8 h → child: 0.3 w × 0.9 h
-     * A 0.9-tall hitbox fits through 1-block-high openings (< 1.0).
-     */
     @SubscribeEvent
     public static void onEntitySize(EntityEvent.Size event) {
         if (!(event.getEntity() instanceof Player player)) return;
@@ -129,11 +133,6 @@ public class ChildEventManager {
         event.setNewEyeHeight(event.getNewEyeHeight() * 0.5f);
     }
 
-    /**
-     * Fires on both sides; we only act server-side.
-     * When a child player right-clicks a chicken while holding wheat seeds,
-     * they mount the chicken (no saddle needed).
-     */
     @SubscribeEvent
     public static void onEntityInteract(PlayerInteractEvent.EntityInteract event) {
         if (event.getEntity().level().isClientSide()) return;
@@ -142,18 +141,13 @@ public class ChildEventManager {
         Player player = event.getEntity();
         if (!childPlayers.contains(player.getUUID())) return;
         if (!player.getItemInHand(event.getHand()).is(Items.WHEAT_SEEDS)) return;
-        if (chicken.isVehicle()) return;   // chicken already has a rider
-        if (player.isPassenger()) return;  // player is already riding something
+        if (chicken.isVehicle()) return;
+        if (player.isPassenger()) return;
 
         player.startRiding(chicken, true);
         event.setCanceled(true);
     }
 
-    /**
-     * On login: re-sync child state to the joining client.
-     * If the server was restarted, restore the state from the player's NBT
-     * (provided the saved expiry has not yet passed).
-     */
     @SubscribeEvent
     public static void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event) {
         if (!(event.getEntity() instanceof ServerPlayer player)) return;
@@ -162,40 +156,63 @@ public class ChildEventManager {
         UUID uuid = player.getUUID();
 
         if (childPlayers.contains(uuid)) {
-            // Same session — UUID still tracked; just re-sync this client.
+            // Same session — re-sync this client and restore health in case it was reset.
             SyncChildStatePacket pkt = new SyncChildStatePacket(new HashSet<>(childPlayers));
             ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), pkt);
-            server.execute(player::refreshDimensions);
+            server.execute(() -> {
+                player.refreshDimensions();
+                applyChildHealth(player);
+            });
+            // Re-send HUD timer with remaining time
+            Long expiry = childExpiry.get(uuid);
+            if (expiry != null) {
+                long remaining = expiry - System.currentTimeMillis();
+                if (remaining > 0) {
+                    ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
+                            new EventTimerPacket(TIMER_NAME, remaining));
+                }
+            }
             return;
         }
 
-        // Server was restarted — check persistent player data.
         long savedExpiry = player.getPersistentData().getLong(NBT_KEY);
         long now = System.currentTimeMillis();
+
         if (savedExpiry > now) {
+            // Effect still active — restore child state after server restart.
             long remainingMs = savedExpiry - now;
             childPlayers.add(uuid);
             childExpiry.put(uuid, savedExpiry);
             server.execute(() -> {
                 player.refreshDimensions();
+                applyChildHealth(player);
                 syncToAll(server);
             });
+            // Re-send HUD timer
+            ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
+                    new EventTimerPacket(TIMER_NAME, remainingMs));
             SCHEDULER.schedule(() -> {
                 childPlayers.remove(uuid);
                 childExpiry.remove(uuid);
                 server.execute(() -> {
                     ServerPlayer p = server.getPlayerList().getPlayer(uuid);
-                    if (p != null) p.refreshDimensions();
+                    if (p != null) {
+                        p.refreshDimensions();
+                        revertChildHealth(p);
+                    }
                     syncToAll(server);
+                    ServerPlayer p2 = server.getPlayerList().getPlayer(uuid);
+                    if (p2 != null)
+                        ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p2),
+                                new EventTimerPacket(TIMER_NAME, 0));
                 });
             }, remainingMs, TimeUnit.MILLISECONDS);
+        } else if (player.getPersistentData().getBoolean(NBT_KEY_HEALTH)) {
+            // Effect expired while player was offline — restore health now.
+            server.execute(() -> revertChildHealth(player));
         }
     }
 
-    /**
-     * On logout: save remaining child-state time to the player's persistent
-     * NBT so the effect survives a server restart.
-     */
     @SubscribeEvent
     public static void onPlayerLogout(PlayerEvent.PlayerLoggedOutEvent event) {
         if (!(event.getEntity() instanceof ServerPlayer player)) return;
@@ -209,6 +226,23 @@ public class ChildEventManager {
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /** Reduces max health to 5 hearts (10 HP) and caps current HP. */
+    private static void applyChildHealth(ServerPlayer player) {
+        AttributeInstance attr = player.getAttribute(Attributes.MAX_HEALTH);
+        if (attr == null) return;
+        attr.setBaseValue(10.0);
+        if (player.getHealth() > 10.0f) player.setHealth(10.0f);
+        player.getPersistentData().putBoolean(NBT_KEY_HEALTH, true);
+    }
+
+    /** Restores max health to 10 hearts (20 HP). */
+    private static void revertChildHealth(ServerPlayer player) {
+        AttributeInstance attr = player.getAttribute(Attributes.MAX_HEALTH);
+        if (attr == null) return;
+        attr.setBaseValue(20.0);
+        player.getPersistentData().remove(NBT_KEY_HEALTH);
+    }
 
     private static void syncToAll(MinecraftServer server) {
         SyncChildStatePacket packet = new SyncChildStatePacket(new HashSet<>(childPlayers));

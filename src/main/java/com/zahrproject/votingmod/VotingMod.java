@@ -9,6 +9,7 @@ import com.zahrproject.votingmod.client.SkateboardRenderHandler;
 import com.zahrproject.votingmod.command.VotingCommand;
 import com.zahrproject.votingmod.enchantments.ModEnchantments;
 import com.zahrproject.votingmod.events.ChildEventManager;
+import com.zahrproject.votingmod.handler.FlipScreenTracker;
 import com.zahrproject.votingmod.handler.ForgeEventHandler;
 import com.zahrproject.votingmod.handler.GoldenPlayerHandler;
 import com.zahrproject.votingmod.handler.SkateboardHandler;
@@ -37,6 +38,7 @@ public class VotingMod {
         modEventBus.addListener(this::clientSetup);
         ModEnchantments.ENCHANTMENTS.register(modEventBus);
         MinecraftForge.EVENT_BUS.register(this);
+        MinecraftForge.EVENT_BUS.register(new FlipScreenTracker());
         MinecraftForge.EVENT_BUS.register(new ForgeEventHandler());
         MinecraftForge.EVENT_BUS.register(new GoldenPlayerHandler());
         MinecraftForge.EVENT_BUS.register(new SkateboardHandler());
