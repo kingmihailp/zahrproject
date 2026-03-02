@@ -467,7 +467,7 @@ public class VotingEventList {
         events.add(new VotingEvent(
                 "Превратить всех игроков в детей на 1 минуту",
                 server -> {
-                    ChildEventManager.activate(server, 60);
+                    ChildEventManager.activate(server, 8 * 60);
                     broadcast(server, "Все игроки стали детьми! Ищите дыры в заборе!");
                 }
         ));
@@ -821,7 +821,7 @@ public class VotingEventList {
         events.add(new VotingEvent(
                 "Прикосновение Мидаса",
                 server -> {
-                    long durationMs = 2 * 60 * 1000L;
+                    long durationMs = 3 * 60 * 1000L;
                     for (ServerPlayer player : server.getPlayerList().getPlayers()) {
                         GoldenPlayerHandler.makeGolden(player, durationMs);
                     }
