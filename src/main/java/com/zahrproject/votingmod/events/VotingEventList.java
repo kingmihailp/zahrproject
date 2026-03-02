@@ -51,6 +51,9 @@ import net.minecraft.world.phys.Vec3;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /**
  * All individual voting events.
@@ -59,6 +62,13 @@ import java.util.Random;
 public class VotingEventList {
 
     private static final Random RANDOM = new Random();
+
+    private static final ScheduledExecutorService FLIP_SCHEDULER =
+            Executors.newSingleThreadScheduledExecutor(r -> {
+                Thread t = new Thread(r, "VotingMod-FlipRevert");
+                t.setDaemon(true);
+                return t;
+            });
 
     /** Loot tables used by the random chest event. */
     private static final ResourceLocation[] CHEST_LOOT_TABLES = {
@@ -838,20 +848,17 @@ public class VotingEventList {
         events.add(new VotingEvent(
                 "Все вверх дном",
                 server -> {
-                    FlipScreenPacket pkt = new FlipScreenPacket(true);
+                    long durationMs = 3 * 60 * 1000L;
+                    FlipScreenPacket pktOn = new FlipScreenPacket(true);
                     for (ServerPlayer p : server.getPlayerList().getPlayers())
-                        ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), pkt);
-                    broadcast(server, "Все вверх дном! Экраны всех игроков перевёрнуты!");
-                }
-        ));
-
-        events.add(new VotingEvent(
-                "Всё на своих местах",
-                server -> {
-                    FlipScreenPacket pkt = new FlipScreenPacket(false);
-                    for (ServerPlayer p : server.getPlayerList().getPlayers())
-                        ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), pkt);
-                    broadcast(server, "Всё на своих местах! Экраны игроков восстановлены!");
+                        ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), pktOn);
+                    broadcast(server, "Все вверх дном! Экраны всех игроков перевёрнуты на 3 минуты!");
+                    FLIP_SCHEDULER.schedule(() -> server.execute(() -> {
+                        FlipScreenPacket pktOff = new FlipScreenPacket(false);
+                        for (ServerPlayer p : server.getPlayerList().getPlayers())
+                            ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), pktOff);
+                        broadcast(server, "Всё на своих местах! Экраны игроков восстановлены.");
+                    }), durationMs, TimeUnit.MILLISECONDS);
                 }
         ));
 
