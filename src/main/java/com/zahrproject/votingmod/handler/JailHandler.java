@@ -49,7 +49,12 @@ public class JailHandler {
                     // Replace any non-solid block (air, plants, snow, water…).
                     // Solid player-built blocks are preserved to avoid griefing.
                     if (!level.getBlockState(pos).isSolid()) {
-                        level.setBlock(pos, Blocks.IRON_BARS.defaultBlockState(), 3);
+                        boolean isFloorOrCeiling = (y == py - 1 || y == py + 3);
+                        level.setBlock(pos,
+                                isFloorOrCeiling
+                                        ? Blocks.STONE_BRICKS.defaultBlockState()
+                                        : Blocks.IRON_BARS.defaultBlockState(),
+                                3);
                     }
                 }
             }
