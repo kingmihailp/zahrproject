@@ -4,14 +4,17 @@ import com.mojang.logging.LogUtils;
 import com.zahrproject.votingmod.client.ChildRenderHandler;
 import com.zahrproject.votingmod.client.EventTimerHud;
 import com.zahrproject.votingmod.client.GoldenOverlayLayer;
+import com.zahrproject.votingmod.client.PlayerFlipRenderHandler;
 import com.zahrproject.votingmod.client.ScreenFlipHandler;
 import com.zahrproject.votingmod.client.SkateboardRenderHandler;
 import com.zahrproject.votingmod.command.VotingCommand;
 import com.zahrproject.votingmod.enchantments.ModEnchantments;
 import com.zahrproject.votingmod.events.ChildEventManager;
+import com.zahrproject.votingmod.handler.FlipModelTracker;
 import com.zahrproject.votingmod.handler.FlipScreenTracker;
 import com.zahrproject.votingmod.handler.ForgeEventHandler;
 import com.zahrproject.votingmod.handler.GoldenPlayerHandler;
+import com.zahrproject.votingmod.handler.HardcoreModeHandler;
 import com.zahrproject.votingmod.handler.HostileVillagersHandler;
 import com.zahrproject.votingmod.handler.SkateboardHandler;
 import com.zahrproject.votingmod.network.ModNetwork;
@@ -45,6 +48,8 @@ public class VotingMod {
         MinecraftForge.EVENT_BUS.register(new SkateboardHandler());
         MinecraftForge.EVENT_BUS.register(ChildEventManager.class);
         MinecraftForge.EVENT_BUS.register(HostileVillagersHandler.class);
+        MinecraftForge.EVENT_BUS.register(HardcoreModeHandler.class);
+        MinecraftForge.EVENT_BUS.register(new FlipModelTracker());
         LOGGER.info("[VotingMod] Mod initialized!");
     }
 
@@ -59,6 +64,7 @@ public class VotingMod {
             MinecraftForge.EVENT_BUS.register(SkateboardRenderHandler.class);
             MinecraftForge.EVENT_BUS.register(ScreenFlipHandler.class);
             MinecraftForge.EVENT_BUS.register(EventTimerHud.class);
+            MinecraftForge.EVENT_BUS.register(PlayerFlipRenderHandler.class);
         });
         FMLJavaModLoadingContext.get().getModEventBus().addListener(GoldenOverlayLayer::onAddLayers);
         LOGGER.info("[VotingMod] Client setup complete.");

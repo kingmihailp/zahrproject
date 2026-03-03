@@ -1,10 +1,13 @@
 package com.zahrproject.votingmod.events;
 
 import com.zahrproject.votingmod.VotingManager;
+import com.zahrproject.votingmod.handler.FlipModelTracker;
 import com.zahrproject.votingmod.handler.FlipScreenTracker;
 import com.zahrproject.votingmod.handler.GoldenPlayerHandler;
+import com.zahrproject.votingmod.handler.HardcoreModeHandler;
 import com.zahrproject.votingmod.handler.HostileVillagersHandler;
 import com.zahrproject.votingmod.network.EventTimerPacket;
+import com.zahrproject.votingmod.network.FlipModelPacket;
 import com.zahrproject.votingmod.network.FlipScreenPacket;
 import com.zahrproject.votingmod.network.ModNetwork;
 import net.minecraftforge.network.PacketDistributor;
@@ -71,6 +74,13 @@ public class VotingEventList {
     private static final ScheduledExecutorService FLIP_SCHEDULER =
             Executors.newSingleThreadScheduledExecutor(r -> {
                 Thread t = new Thread(r, "VotingMod-FlipRevert");
+                t.setDaemon(true);
+                return t;
+            });
+
+    private static final ScheduledExecutorService FLIP_MODEL_SCHEDULER =
+            Executors.newSingleThreadScheduledExecutor(r -> {
+                Thread t = new Thread(r, "VotingMod-FlipModelRevert");
                 t.setDaemon(true);
                 return t;
             });
@@ -855,6 +865,50 @@ public class VotingEventList {
                     long duration = 10L * 60 * 1000;
                     HostileVillagersHandler.activate(server, duration);
                     broadcast(server, "Пассивная агрессия! Жители разозлились и нападают на игроков 10 минут!");
+                }
+        ));
+
+        // ── Special: hardcore mode ────────────────────────────────────────────
+
+        events.add(new VotingEvent(
+                "Выше, сильнее, сложнее",
+                server -> {
+                    long duration = 5L * 60 * 1000;
+                    HardcoreModeHandler.activate(server, duration);
+                    broadcast(server, "Выше, сильнее, сложнее! У всех игроков осталось 2 сердца на 5 минут!");
+                }
+        ));
+
+        // ── Special: flip player models ───────────────────────────────────────
+
+        events.add(new VotingEvent(
+                "Голова вниз",
+                server -> {
+                    long durationMs = 10L * 60 * 1000;
+                    FlipModelTracker.setActive(System.currentTimeMillis() + durationMs, durationMs);
+                    FlipModelPacket pktOn     = new FlipModelPacket(true);
+                    EventTimerPacket timerStart = new EventTimerPacket(
+                            FlipModelTracker.TIMER_NAME, durationMs, durationMs);
+                    for (ServerPlayer p : server.getPlayerList().getPlayers()) {
+                        ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), pktOn);
+                        ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), timerStart);
+                    }
+                    broadcast(server, "Голова вниз! Все игроки перевёрнуты на 10 минут!");
+                    FLIP_MODEL_SCHEDULER.schedule(() -> {
+                        FlipModelTracker.clear();
+                        MinecraftServer srv = ServerLifecycleHooks.getCurrentServer();
+                        if (srv == null) return;
+                        srv.execute(() -> {
+                            FlipModelPacket pktOff  = new FlipModelPacket(false);
+                            EventTimerPacket timerEnd = new EventTimerPacket(
+                                    FlipModelTracker.TIMER_NAME, 0, 0);
+                            for (ServerPlayer p : srv.getPlayerList().getPlayers()) {
+                                ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), pktOff);
+                                ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), timerEnd);
+                            }
+                            broadcast(srv, "Всё в порядке! Игроки снова стоят правильно.");
+                        });
+                    }, durationMs, TimeUnit.MILLISECONDS);
                 }
         ));
 

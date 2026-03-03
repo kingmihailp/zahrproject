@@ -143,11 +143,13 @@ public class EventTimerHud {
 
     /** Returns a colour for the named event, falling back to green. */
     private static int colorForEvent(String name) {
-        if (name.contains("дном"))    return 0xFFFF6060; // Все вверх дном      → red
-        if (name.contains("Мидас"))   return 0xFFFFD700; // Мидас               → gold
-        if (name.contains("детство")) return 0xFF5BC0FF; // Обратно в детство   → light blue
-        if (name.contains("агресс"))  return 0xFFBB7733; // Пассивная агрессия  → brown
-        return 0xFF88FF88;                                // fallback             → green
+        if (name.contains("дном"))    return 0xFFFF6060; // Все вверх дном       → red
+        if (name.contains("Мидас"))   return 0xFFFFD700; // Мидас                → gold
+        if (name.contains("детство")) return 0xFF5BC0FF; // Обратно в детство    → light blue
+        if (name.contains("агресс"))  return 0xFFBB7733; // Пассивная агрессия   → brown
+        if (name.contains("сложн"))   return 0xFFDD1122; // Выше, сильнее, слож. → crimson
+        if (name.contains("Голова"))  return 0xFFCC55FF; // Голова вниз          → purple
+        return 0xFF88FF88;                                // fallback              → green
     }
 
     /** Replaces the alpha byte of a fully-opaque ARGB colour. */

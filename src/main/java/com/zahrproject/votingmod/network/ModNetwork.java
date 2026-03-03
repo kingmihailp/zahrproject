@@ -70,5 +70,12 @@ public class ModNetwork {
                 EventTimerPacket::encode,
                 EventTimerPacket::decode,
                 EventTimerPacket::handle);
+
+        // S2C: Server tells each client to render all player models upside-down (or restore)
+        CHANNEL.registerMessage(id++,
+                FlipModelPacket.class,
+                FlipModelPacket::encode,
+                FlipModelPacket::decode,
+                FlipModelPacket::handle);
     }
 }
