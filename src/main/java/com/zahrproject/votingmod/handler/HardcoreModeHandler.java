@@ -5,22 +5,34 @@ import com.zahrproject.votingmod.network.ModNetwork;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.entity.ai.attributes.AttributeInstance;
-import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.Difficulty;
+import net.minecraft.world.level.GameType;
+import net.minecraftforge.event.entity.living.LivingDeathEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.network.PacketDistributor;
 import net.minecraftforge.server.ServerLifecycleHooks;
 
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Manages the "Выше, сильнее, сложнее" event:
- *  - All players' max health is reduced to 4 HP (2 hearts) for the duration.
- *  - Health reduction and timer survive reconnects via player NBT.
- *  - On expiry (whether online or offline) max health is restored to 20 HP.
+ * Manages the "Выше, сильнее, сложнее" event — real Minecraft hardcore mode for a limited time:
+ *
+ *   • World difficulty is set to HARD.
+ *   • Any player who dies is placed in SPECTATOR mode instead of respawning
+ *     (mirroring vanilla hardcore behaviour in multiplayer).
+ *   • When the event ends: difficulty is restored, all event-killed spectators
+ *     are moved back to SURVIVAL with full health.
+ *
+ * State survives world re-entry and server restarts via player NBT:
+ *   - votingmod_hardcore_expiry   – absolute expiry timestamp (ms)
+ *   - votingmod_hardcore_duration – total duration (ms), for correct HUD bar fraction
+ *   - votingmod_hardcore_died     – true if this player died during the event
  */
 public class HardcoreModeHandler {
 
@@ -28,8 +40,7 @@ public class HardcoreModeHandler {
 
     private static final String NBT_EXPIRY_KEY   = "votingmod_hardcore_expiry";
     private static final String NBT_DURATION_KEY = "votingmod_hardcore_duration";
-    /** Set to true when we reduced this player's max health, so we can restore it on login. */
-    private static final String NBT_HEALTH_KEY   = "votingmod_hardcore_health_reduced";
+    private static final String NBT_DIED_KEY     = "votingmod_hardcore_died";
 
     private static final ScheduledExecutorService SCHEDULER =
             Executors.newSingleThreadScheduledExecutor(r -> {
@@ -38,8 +49,14 @@ public class HardcoreModeHandler {
                 return t;
             });
 
-    public static volatile long expiryMs   = 0;
-    public static volatile long durationMs = 0;
+    /** Global event state. */
+    public static volatile long       expiryMs        = 0;
+    public static volatile long       durationMs      = 0;
+    /** Original difficulty before the event, so we can restore it. null = server was restarted. */
+    private static volatile Difficulty savedDifficulty = null;
+
+    /** UUIDs of players who died during the current event and are now in spectator mode. */
+    private static final Set<UUID> killedDuringEvent = ConcurrentHashMap.newKeySet();
 
     public static boolean isActive() {
         return System.currentTimeMillis() < expiryMs;
@@ -51,33 +68,45 @@ public class HardcoreModeHandler {
         durationMs = duration;
         expiryMs   = System.currentTimeMillis() + duration;
 
+        // Save current difficulty and switch to HARD
+        savedDifficulty = server.getWorldData().getDifficulty();
+        server.setDifficulty(Difficulty.HARD, true);
+
+        // Persist to all online players
         for (ServerPlayer p : server.getPlayerList().getPlayers()) {
-            applyHardcoreHealth(p);
-            p.getPersistentData().putLong(NBT_EXPIRY_KEY,   expiryMs);
-            p.getPersistentData().putLong(NBT_DURATION_KEY, durationMs);
+            CompoundTag tag = p.getPersistentData();
+            tag.putLong(NBT_EXPIRY_KEY,   expiryMs);
+            tag.putLong(NBT_DURATION_KEY, durationMs);
         }
 
+        // Start HUD timer
         EventTimerPacket timerStart = new EventTimerPacket(TIMER_NAME, duration, duration);
         for (ServerPlayer p : server.getPlayerList().getPlayers())
             ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), timerStart);
 
-        SCHEDULER.schedule(() -> {
-            expiryMs = 0;
-            MinecraftServer srv = ServerLifecycleHooks.getCurrentServer();
-            if (srv == null) return;
-            srv.execute(() -> {
-                for (ServerPlayer p : srv.getPlayerList().getPlayers()) {
-                    revertHardcoreHealth(p);
-                    p.getPersistentData().remove(NBT_EXPIRY_KEY);
-                    p.getPersistentData().remove(NBT_DURATION_KEY);
-                    ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p),
-                            new EventTimerPacket(TIMER_NAME, 0, 0));
-                }
-            });
-        }, duration, TimeUnit.MILLISECONDS);
+        scheduleRevert(duration);
     }
 
     // ── Forge Events ──────────────────────────────────────────────────────────
+
+    /** When a player dies during the event, mark them and switch to spectator on respawn. */
+    @SubscribeEvent
+    public static void onPlayerDeath(LivingDeathEvent event) {
+        if (!isActive()) return;
+        if (!(event.getEntity() instanceof ServerPlayer player)) return;
+        killedDuringEvent.add(player.getUUID());
+        player.getPersistentData().putBoolean(NBT_DIED_KEY, true);
+    }
+
+    /** After the respawn completes, force spectator mode for hardcore-killed players. */
+    @SubscribeEvent
+    public static void onPlayerRespawn(PlayerEvent.PlayerRespawnEvent event) {
+        if (!isActive()) return;
+        if (!(event.getEntity() instanceof ServerPlayer player)) return;
+        if (event.isEndConquered()) return; // entering the End — leave alone
+        if (!killedDuringEvent.contains(player.getUUID())) return;
+        player.setGameMode(GameType.SPECTATOR);
+    }
 
     @SubscribeEvent
     public static void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event) {
@@ -87,15 +116,10 @@ public class HardcoreModeHandler {
 
         CompoundTag tag = player.getPersistentData();
 
-        // Health was reduced in a previous session; effect might have ended while offline.
-        if (tag.getBoolean(NBT_HEALTH_KEY) && !tag.contains(NBT_EXPIRY_KEY)) {
-            // No active event recorded but health flag is set → restore unconditionally.
-            server.execute(() -> revertHardcoreHealth(player));
-            return;
-        }
-
         if (!tag.contains(NBT_EXPIRY_KEY)) {
-            // Not part of any event → clear stale HUD bar if present.
+            // Not part of any active/recent event.
+            // If the died-flag is somehow set, clean it up.
+            if (tag.getBoolean(NBT_DIED_KEY)) tag.remove(NBT_DIED_KEY);
             ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
                     new EventTimerPacket(TIMER_NAME, 0, 0));
             return;
@@ -106,38 +130,42 @@ public class HardcoreModeHandler {
         long remaining     = savedExpiry - System.currentTimeMillis();
 
         if (remaining <= 0) {
-            // Effect expired while offline.
+            // Effect expired while offline — clean up everything.
             tag.remove(NBT_EXPIRY_KEY);
             tag.remove(NBT_DURATION_KEY);
+            if (tag.getBoolean(NBT_DIED_KEY)) {
+                tag.remove(NBT_DIED_KEY);
+                // Player was in spectator when they went offline; restore them now.
+                server.execute(() -> {
+                    if (player.isSpectator()) {
+                        player.setGameMode(GameType.SURVIVAL);
+                        player.setHealth(player.getMaxHealth());
+                    }
+                });
+            }
             expiryMs = 0;
-            server.execute(() -> revertHardcoreHealth(player));
+            killedDuringEvent.remove(player.getUUID());
             ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
                     new EventTimerPacket(TIMER_NAME, 0, 0));
             return;
         }
 
-        // Still active — restore global state if lost (same-JVM world re-enter or server restart).
+        // Event still active — restore global state if lost (same-JVM re-enter / server restart).
         if (!isActive()) {
             expiryMs   = savedExpiry;
             durationMs = savedDuration;
-            SCHEDULER.schedule(() -> {
-                expiryMs = 0;
-                MinecraftServer srv = ServerLifecycleHooks.getCurrentServer();
-                if (srv == null) return;
-                srv.execute(() -> {
-                    for (ServerPlayer p : srv.getPlayerList().getPlayers()) {
-                        revertHardcoreHealth(p);
-                        p.getPersistentData().remove(NBT_EXPIRY_KEY);
-                        p.getPersistentData().remove(NBT_DURATION_KEY);
-                        ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p),
-                                new EventTimerPacket(TIMER_NAME, 0, 0));
-                    }
-                });
-            }, remaining, TimeUnit.MILLISECONDS);
+            // Difficulty should already be HARD if we set it, but ensure it in any case.
+            server.setDifficulty(Difficulty.HARD, true);
+            scheduleRevert(remaining);
         }
 
-        // Apply reduced health and re-send HUD timer.
-        server.execute(() -> applyHardcoreHealth(player));
+        // If this player died during the event, enforce spectator immediately.
+        if (tag.getBoolean(NBT_DIED_KEY)) {
+            killedDuringEvent.add(player.getUUID());
+            server.execute(() -> player.setGameMode(GameType.SPECTATOR));
+        }
+
+        // Re-send HUD timer with correct fraction.
         ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
                 new EventTimerPacket(TIMER_NAME, remaining, savedDuration));
     }
@@ -157,18 +185,32 @@ public class HardcoreModeHandler {
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private static void applyHardcoreHealth(ServerPlayer player) {
-        AttributeInstance attr = player.getAttribute(Attributes.MAX_HEALTH);
-        if (attr == null) return;
-        attr.setBaseValue(4.0); // 2 hearts
-        if (player.getHealth() > 4.0f) player.setHealth(4.0f);
-        player.getPersistentData().putBoolean(NBT_HEALTH_KEY, true);
-    }
-
-    private static void revertHardcoreHealth(ServerPlayer player) {
-        AttributeInstance attr = player.getAttribute(Attributes.MAX_HEALTH);
-        if (attr == null) return;
-        attr.setBaseValue(20.0); // 10 hearts
-        player.getPersistentData().remove(NBT_HEALTH_KEY);
+    private static void scheduleRevert(long delayMs) {
+        SCHEDULER.schedule(() -> {
+            expiryMs = 0;
+            killedDuringEvent.clear();
+            MinecraftServer srv = ServerLifecycleHooks.getCurrentServer();
+            if (srv == null) return;
+            srv.execute(() -> {
+                // Restore original difficulty
+                if (savedDifficulty != null) {
+                    srv.setDifficulty(savedDifficulty, true);
+                    savedDifficulty = null;
+                }
+                // Revive all event-killed players and clean up NBT
+                for (ServerPlayer p : srv.getPlayerList().getPlayers()) {
+                    boolean wasDead = p.getPersistentData().getBoolean(NBT_DIED_KEY);
+                    p.getPersistentData().remove(NBT_EXPIRY_KEY);
+                    p.getPersistentData().remove(NBT_DURATION_KEY);
+                    p.getPersistentData().remove(NBT_DIED_KEY);
+                    if (wasDead && p.isSpectator()) {
+                        p.setGameMode(GameType.SURVIVAL);
+                        p.setHealth(p.getMaxHealth());
+                    }
+                    ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p),
+                            new EventTimerPacket(TIMER_NAME, 0, 0));
+                }
+            });
+        }, delayMs, TimeUnit.MILLISECONDS);
     }
 }
