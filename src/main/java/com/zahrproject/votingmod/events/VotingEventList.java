@@ -886,9 +886,8 @@ public class VotingEventList {
         events.add(new VotingEvent(
                 "Под шхонкой",
                 server -> {
-                    long duration = 2L * 60 * 1000;
-                    JailHandler.activate(server, duration);
-                    broadcast(server, "Под шхонкой! Все игроки заперты в клетке с чешуйницами на 2 минуты!");
+                    JailHandler.activate(server);
+                    broadcast(server, "Под шхонкой! Все игроки заперты в клетке с чешуйницами!");
                 }
         ));
 
