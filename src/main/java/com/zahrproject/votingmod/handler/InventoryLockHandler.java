@@ -76,12 +76,26 @@ public class InventoryLockHandler {
 
     // ── Forge Events ──────────────────────────────────────────────────────────
 
-    /** Prevent players from picking up items while their inventory is hidden. */
+    /**
+     * While the event is active, only allow pickup if the item fits in the
+     * hotbar (slots 0-8).  Vanilla places items from slot 0 upward, so
+     * allowing the event here is sufficient — items will land in the hotbar.
+     * Cancel once all 9 hotbar slots are full and no stack can be merged.
+     */
     @SubscribeEvent
     public static void onItemPickup(EntityItemPickupEvent event) {
-        if (isActive()) {
-            event.setCanceled(true);
+        if (!isActive()) return;
+        if (!(event.getEntity() instanceof ServerPlayer player)) return;
+
+        ItemStack incoming = event.getItem().getItem();
+        Inventory inv = player.getInventory();
+        for (int i = 0; i < 9; i++) {
+            ItemStack slot = inv.getItem(i);
+            if (slot.isEmpty()) return;                          // free hotbar slot
+            if (ItemStack.isSameItemSameTags(slot, incoming)
+                    && slot.getCount() < slot.getMaxStackSize()) return; // stackable
         }
+        event.setCanceled(true); // hotbar full, no merge possible
     }
 
     @SubscribeEvent
