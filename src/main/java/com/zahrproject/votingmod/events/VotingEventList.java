@@ -6,6 +6,7 @@ import com.zahrproject.votingmod.handler.FlipScreenTracker;
 import com.zahrproject.votingmod.handler.GoldenPlayerHandler;
 import com.zahrproject.votingmod.handler.HardcoreModeHandler;
 import com.zahrproject.votingmod.handler.HostileVillagersHandler;
+import com.zahrproject.votingmod.handler.InventoryLockHandler;
 import com.zahrproject.votingmod.handler.JailHandler;
 import com.zahrproject.votingmod.handler.RaiderWaveHandler;
 import com.zahrproject.votingmod.network.EventTimerPacket;
@@ -976,6 +977,31 @@ public class VotingEventList {
                             broadcast(srv, "Всё на своих местах! Экраны игроков восстановлены.");
                         });
                     }, durationMs, TimeUnit.MILLISECONDS);
+                }
+        ));
+
+        // ── Special: inventory lock (hotbar-only) ─────────────────────────────
+
+        events.add(new VotingEvent(
+                "Нехватка места",
+                server -> {
+                    long duration = 10L * 60 * 1000;
+                    InventoryLockHandler.activate(server, duration);
+                    broadcast(server, "Нехватка места! У всех игроков остался только хот-бар на 10 минут. Остальные предметы вернутся потом!");
+                }
+        ));
+
+        // ── Special: every registered mob effect for 3 seconds ────────────────
+
+        events.add(new VotingEvent(
+                "Невозможное может быть возможным",
+                server -> {
+                    for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                        for (MobEffect effect : ForgeRegistries.MOB_EFFECTS.getValues()) {
+                            player.addEffect(new MobEffectInstance(effect, 60, 0, false, true));
+                        }
+                    }
+                    broadcast(server, "Невозможное может быть возможным! Все эффекты из реестра на 3 секунды!");
                 }
         ));
 
