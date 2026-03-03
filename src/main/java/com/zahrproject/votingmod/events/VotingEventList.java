@@ -8,6 +8,7 @@ import com.zahrproject.votingmod.handler.HardcoreModeHandler;
 import com.zahrproject.votingmod.handler.HostileVillagersHandler;
 import com.zahrproject.votingmod.handler.InventoryLockHandler;
 import com.zahrproject.votingmod.handler.JailHandler;
+import com.zahrproject.votingmod.handler.MeteorRainHandler;
 import com.zahrproject.votingmod.handler.RaiderWaveHandler;
 import com.zahrproject.votingmod.network.EventTimerPacket;
 import com.zahrproject.votingmod.network.FlipModelPacket;
@@ -1002,6 +1003,14 @@ public class VotingEventList {
                         }
                     }
                     broadcast(server, "Невозможное может быть возможным! Все эффекты из реестра на 3 секунды!");
+                }
+        ));
+
+        events.add(new VotingEvent(
+                "Метеоритный дождь",
+                server -> {
+                    MeteorRainHandler.activate(server);
+                    broadcast(server, "Метеоритный дождь! Уклоняйтесь от падающих метеоритов!");
                 }
         ));
 
