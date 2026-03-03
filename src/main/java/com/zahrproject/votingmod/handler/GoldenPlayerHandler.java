@@ -272,6 +272,7 @@ public class GoldenPlayerHandler {
     public void onBlockBreak(BlockEvent.BreakEvent event) {
         if (!(event.getPlayer() instanceof ServerPlayer player)) return;
         if (!isGolden(player.getUUID())) return;
+        if (event.getState().is(Blocks.GOLD_BLOCK)) return; // allow breaking gold blocks normally
         event.setCanceled(true);
         player.serverLevel().setBlock(event.getPos(), Blocks.GOLD_BLOCK.defaultBlockState(), 3);
     }
