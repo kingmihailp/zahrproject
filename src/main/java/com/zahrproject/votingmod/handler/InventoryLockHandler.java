@@ -9,6 +9,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
+import net.minecraftforge.event.entity.player.EntityItemPickupEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.network.PacketDistributor;
@@ -74,6 +75,14 @@ public class InventoryLockHandler {
     }
 
     // ── Forge Events ──────────────────────────────────────────────────────────
+
+    /** Prevent players from picking up items while their inventory is hidden. */
+    @SubscribeEvent
+    public static void onItemPickup(EntityItemPickupEvent event) {
+        if (isActive()) {
+            event.setCanceled(true);
+        }
+    }
 
     @SubscribeEvent
     public static void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event) {

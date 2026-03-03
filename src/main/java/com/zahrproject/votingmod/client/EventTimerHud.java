@@ -45,6 +45,12 @@ public class EventTimerHud {
 
     // ── Public API ────────────────────────────────────────────────────────────
 
+    /** Returns true if the named event timer is currently active on this client. */
+    public static boolean isTimerActive(String name) {
+        long[] data = activeTimers.get(name);
+        return data != null && System.currentTimeMillis() < data[1];
+    }
+
     /**
      * Called by {@link com.zahrproject.votingmod.network.EventTimerPacket} on the client thread.
      *

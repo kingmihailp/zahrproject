@@ -4,6 +4,7 @@ import com.mojang.logging.LogUtils;
 import com.zahrproject.votingmod.client.ChildRenderHandler;
 import com.zahrproject.votingmod.client.EventTimerHud;
 import com.zahrproject.votingmod.client.GoldenOverlayLayer;
+import com.zahrproject.votingmod.client.InventoryLockClientHandler;
 import com.zahrproject.votingmod.client.PlayerFlipRenderHandler;
 import com.zahrproject.votingmod.client.ScreenFlipHandler;
 import com.zahrproject.votingmod.client.SkateboardRenderHandler;
@@ -67,6 +68,7 @@ public class VotingMod {
             MinecraftForge.EVENT_BUS.register(ScreenFlipHandler.class);
             MinecraftForge.EVENT_BUS.register(EventTimerHud.class);
             MinecraftForge.EVENT_BUS.register(PlayerFlipRenderHandler.class);
+            MinecraftForge.EVENT_BUS.register(InventoryLockClientHandler.class);
         });
         FMLJavaModLoadingContext.get().getModEventBus().addListener(GoldenOverlayLayer::onAddLayers);
         LOGGER.info("[VotingMod] Client setup complete.");
