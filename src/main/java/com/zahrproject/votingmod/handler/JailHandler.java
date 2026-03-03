@@ -16,9 +16,9 @@ import net.minecraft.world.level.block.Blocks;
  *   A 5×5 iron bar cage is built around each online player and 5 silverfish
  *   are spawned inside, immediately targeting that player.
  *
- *   There is no timer and no automatic cleanup — the cage and silverfish
- *   persist until broken/killed normally.
- *   Only AIR blocks are replaced, so existing solid walls are not touched.
+ *   No timer, no cleanup — cage and silverfish persist until broken/killed.
+ *   Bars are placed over any replaceable block (air, plants, snow, etc.),
+ *   but solid player-built structures are left intact.
  */
 public class JailHandler {
 
@@ -35,18 +35,20 @@ public class JailHandler {
         int pz = Mth.floor(player.getZ());
         ServerLevel level = player.serverLevel();
 
-        // 5×5 perimeter (walls at x=px±2 or z=pz±2) + floor at y=py-1 + ceiling at y=py+3.
-        // Interior 3×3×3 (py to py+2) is left free for the player and silverfish.
+        // 5×5 outer shell: walls at x=px±2 or z=pz±2, floor at y=py-1, ceiling at y=py+3.
+        // Interior 3×3 columns (py to py+2) left free for the player and silverfish.
         for (int x = px - 2; x <= px + 2; x++) {
             for (int z = pz - 2; z <= pz + 2; z++) {
                 for (int y = py - 1; y <= py + 3; y++) {
-                    boolean isPerimeter = (x == px - 2 || x == px + 2
+                    boolean isShell = (x == px - 2 || x == px + 2
                             || z == pz - 2 || z == pz + 2
                             || y == py - 1 || y == py + 3);
-                    if (!isPerimeter) continue;
+                    if (!isShell) continue;
 
                     BlockPos pos = new BlockPos(x, y, z);
-                    if (level.getBlockState(pos).isAir()) {
+                    // Replace any non-solid block (air, plants, snow, water…).
+                    // Solid player-built blocks are preserved to avoid griefing.
+                    if (!level.getBlockState(pos).isSolid()) {
                         level.setBlock(pos, Blocks.IRON_BARS.defaultBlockState(), 3);
                     }
                 }

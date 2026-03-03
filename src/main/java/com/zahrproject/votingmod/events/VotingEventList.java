@@ -877,7 +877,7 @@ public class VotingEventList {
                 server -> {
                     long duration = 5L * 60 * 1000;
                     HardcoreModeHandler.activate(server, duration);
-                    broadcast(server, "Выше, сильнее, сложнее! Хардкор на 5 минут: сложность Hard, умрёшь — будешь наблюдателем до конца!");
+                    broadcast(server, "Выше, сильнее, сложнее! Сложность Hard и x4 спавн враждебных мобов на 5 минут!");
                 }
         ));
 
