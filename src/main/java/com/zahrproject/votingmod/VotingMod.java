@@ -16,6 +16,7 @@ import com.zahrproject.votingmod.handler.ForgeEventHandler;
 import com.zahrproject.votingmod.handler.GoldenPlayerHandler;
 import com.zahrproject.votingmod.handler.HardcoreModeHandler;
 import com.zahrproject.votingmod.handler.HostileVillagersHandler;
+import com.zahrproject.votingmod.handler.JailHandler;
 import com.zahrproject.votingmod.handler.SkateboardHandler;
 import com.zahrproject.votingmod.network.ModNetwork;
 import net.minecraftforge.common.MinecraftForge;
@@ -49,6 +50,7 @@ public class VotingMod {
         MinecraftForge.EVENT_BUS.register(ChildEventManager.class);
         MinecraftForge.EVENT_BUS.register(HostileVillagersHandler.class);
         MinecraftForge.EVENT_BUS.register(HardcoreModeHandler.class);
+        MinecraftForge.EVENT_BUS.register(JailHandler.class);
         MinecraftForge.EVENT_BUS.register(new FlipModelTracker());
         LOGGER.info("[VotingMod] Mod initialized!");
     }

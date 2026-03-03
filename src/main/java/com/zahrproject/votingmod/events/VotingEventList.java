@@ -6,6 +6,8 @@ import com.zahrproject.votingmod.handler.FlipScreenTracker;
 import com.zahrproject.votingmod.handler.GoldenPlayerHandler;
 import com.zahrproject.votingmod.handler.HardcoreModeHandler;
 import com.zahrproject.votingmod.handler.HostileVillagersHandler;
+import com.zahrproject.votingmod.handler.JailHandler;
+import com.zahrproject.votingmod.handler.RaiderWaveHandler;
 import com.zahrproject.votingmod.network.EventTimerPacket;
 import com.zahrproject.votingmod.network.FlipModelPacket;
 import com.zahrproject.votingmod.network.FlipScreenPacket;
@@ -876,6 +878,27 @@ public class VotingEventList {
                     long duration = 5L * 60 * 1000;
                     HardcoreModeHandler.activate(server, duration);
                     broadcast(server, "Выше, сильнее, сложнее! Хардкор на 5 минут: сложность Hard, умрёшь — будешь наблюдателем до конца!");
+                }
+        ));
+
+        // ── Special: jail with silverfish ────────────────────────────────────
+
+        events.add(new VotingEvent(
+                "Под шхонкой",
+                server -> {
+                    long duration = 2L * 60 * 1000;
+                    JailHandler.activate(server, duration);
+                    broadcast(server, "Под шхонкой! Все игроки заперты в клетке с чешуйницами на 2 минуты!");
+                }
+        ));
+
+        // ── Special: raider wave ──────────────────────────────────────────────
+
+        events.add(new VotingEvent(
+                "Они следят, они ищут",
+                server -> {
+                    int wave = RaiderWaveHandler.activate(server);
+                    broadcast(server, "Они следят, они ищут! Волна рейдеров #" + wave + " появилась рядом с каждым игроком!");
                 }
         ));
 
