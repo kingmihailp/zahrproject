@@ -21,6 +21,8 @@ import net.minecraftforge.event.level.BlockEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.network.PacketDistributor;
 
+import net.minecraftforge.server.ServerLifecycleHooks;
+
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -130,12 +132,16 @@ public class GoldenPlayerHandler {
         for (ServerPlayer p : server.getPlayerList().getPlayers())
             ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), timerStart);
         // After expiry: sync golden state and remove HUD timer
-        SCHEDULER.schedule(() -> server.execute(() -> {
-            sendSync(server);
-            EventTimerPacket timerEnd = new EventTimerPacket("Прикосновение Мидаса", 0, 0);
-            for (ServerPlayer p : server.getPlayerList().getPlayers())
-                ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), timerEnd);
-        }), durationMs, TimeUnit.MILLISECONDS);
+        SCHEDULER.schedule(() -> {
+            MinecraftServer srv = ServerLifecycleHooks.getCurrentServer();
+            if (srv == null) return;
+            srv.execute(() -> {
+                sendSync(srv);
+                EventTimerPacket timerEnd = new EventTimerPacket("Прикосновение Мидаса", 0, 0);
+                for (ServerPlayer p : srv.getPlayerList().getPlayers())
+                    ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), timerEnd);
+            });
+        }, durationMs, TimeUnit.MILLISECONDS);
     }
 
     /** Sends the current golden-UUID set to a single (just-logged-in) player. */
@@ -209,12 +215,16 @@ public class GoldenPlayerHandler {
             // Re-send HUD timer with original total duration for correct bar fraction
             ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
                     new EventTimerPacket("Прикосновение Мидаса", remainingMs, goldenEventDurationMs));
-            MinecraftServer server = player.getServer();
-            if (server != null) {
-                SCHEDULER.schedule(
-                        () -> server.execute(() -> sendSync(server)),
-                        remainingMs, TimeUnit.MILLISECONDS);
-            }
+            SCHEDULER.schedule(() -> {
+                MinecraftServer srv = ServerLifecycleHooks.getCurrentServer();
+                if (srv == null) return;
+                srv.execute(() -> {
+                    sendSync(srv);
+                    EventTimerPacket timerEnd = new EventTimerPacket("Прикосновение Мидаса", 0, 0);
+                    for (ServerPlayer p : srv.getPlayerList().getPlayers())
+                        ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), timerEnd);
+                });
+            }, remainingMs, TimeUnit.MILLISECONDS);
         }
         // else: effect expired while offline → syncToPlayer() already sent the
         // correct (empty/partial) set above, clearing the golden overlay.

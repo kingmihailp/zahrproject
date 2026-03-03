@@ -19,6 +19,8 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.network.PacketDistributor;
 import org.slf4j.Logger;
 
+import net.minecraftforge.server.ServerLifecycleHooks;
+
 import java.util.*;
 import java.util.concurrent.*;
 
@@ -99,17 +101,19 @@ public class ChildEventManager {
         SCHEDULER.schedule(() -> {
             childPlayers.removeAll(activated);
             for (UUID uuid : activated) childExpiry.remove(uuid);
-            server.execute(() -> {
+            MinecraftServer srv = ServerLifecycleHooks.getCurrentServer();
+            if (srv == null) return;
+            srv.execute(() -> {
                 for (UUID uuid : activated) {
-                    ServerPlayer p = server.getPlayerList().getPlayer(uuid);
+                    ServerPlayer p = srv.getPlayerList().getPlayer(uuid);
                     if (p != null) {
                         p.refreshDimensions();
                         revertChildHealth(p);
                     }
                 }
-                syncToAll(server);
+                syncToAll(srv);
                 EventTimerPacket timerEnd = new EventTimerPacket(TIMER_NAME, 0, 0);
-                for (ServerPlayer p : server.getPlayerList().getPlayers())
+                for (ServerPlayer p : srv.getPlayerList().getPlayers())
                     ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), timerEnd);
                 LOGGER.info("[VotingMod] Players reverted from child state.");
             });
@@ -204,14 +208,16 @@ public class ChildEventManager {
             SCHEDULER.schedule(() -> {
                 childPlayers.remove(uuid);
                 childExpiry.remove(uuid);
-                server.execute(() -> {
-                    ServerPlayer p = server.getPlayerList().getPlayer(uuid);
+                MinecraftServer srv = ServerLifecycleHooks.getCurrentServer();
+                if (srv == null) return;
+                srv.execute(() -> {
+                    ServerPlayer p = srv.getPlayerList().getPlayer(uuid);
                     if (p != null) {
                         p.refreshDimensions();
                         revertChildHealth(p);
                     }
-                    syncToAll(server);
-                    ServerPlayer p2 = server.getPlayerList().getPlayer(uuid);
+                    syncToAll(srv);
+                    ServerPlayer p2 = srv.getPlayerList().getPlayer(uuid);
                     if (p2 != null)
                         ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p2),
                                 new EventTimerPacket(TIMER_NAME, 0, 0));

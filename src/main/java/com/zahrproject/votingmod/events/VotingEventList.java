@@ -45,6 +45,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.EnchantmentInstance;
 import net.minecraftforge.registries.ForgeRegistries;
+import net.minecraftforge.server.ServerLifecycleHooks;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.RandomizableContainerBlockEntity;
@@ -859,16 +860,20 @@ public class VotingEventList {
                         ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), timerStart);
                     }
                     broadcast(server, "Все вверх дном! Экраны всех игроков перевёрнуты на 3 минуты!");
-                    FLIP_SCHEDULER.schedule(() -> server.execute(() -> {
+                    FLIP_SCHEDULER.schedule(() -> {
                         FlipScreenTracker.clear();
-                        FlipScreenPacket pktOff  = new FlipScreenPacket(false);
-                        EventTimerPacket timerEnd = new EventTimerPacket("Все вверх дном", 0, 0);
-                        for (ServerPlayer p : server.getPlayerList().getPlayers()) {
-                            ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), pktOff);
-                            ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), timerEnd);
-                        }
-                        broadcast(server, "Всё на своих местах! Экраны игроков восстановлены.");
-                    }), durationMs, TimeUnit.MILLISECONDS);
+                        MinecraftServer srv = ServerLifecycleHooks.getCurrentServer();
+                        if (srv == null) return;
+                        srv.execute(() -> {
+                            FlipScreenPacket pktOff  = new FlipScreenPacket(false);
+                            EventTimerPacket timerEnd = new EventTimerPacket("Все вверх дном", 0, 0);
+                            for (ServerPlayer p : srv.getPlayerList().getPlayers()) {
+                                ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), pktOff);
+                                ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), timerEnd);
+                            }
+                            broadcast(srv, "Всё на своих местах! Экраны игроков восстановлены.");
+                        });
+                    }, durationMs, TimeUnit.MILLISECONDS);
                 }
         ));
 
