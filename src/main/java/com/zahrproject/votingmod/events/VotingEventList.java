@@ -3,6 +3,7 @@ package com.zahrproject.votingmod.events;
 import com.zahrproject.votingmod.VotingManager;
 import com.zahrproject.votingmod.handler.FlipScreenTracker;
 import com.zahrproject.votingmod.handler.GoldenPlayerHandler;
+import com.zahrproject.votingmod.handler.HostileVillagersHandler;
 import com.zahrproject.votingmod.network.EventTimerPacket;
 import com.zahrproject.votingmod.network.FlipScreenPacket;
 import com.zahrproject.votingmod.network.ModNetwork;
@@ -46,6 +47,7 @@ import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.EnchantmentInstance;
 import net.minecraftforge.registries.ForgeRegistries;
 import net.minecraftforge.server.ServerLifecycleHooks;
+import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.RandomizableContainerBlockEntity;
@@ -829,6 +831,30 @@ public class VotingEventList {
                     long newInterval = Math.max(20, vm.getIntervalSeconds() - 20);
                     vm.setInterval(newInterval);
                     broadcast(server, "Больше голосований! Интервал сокращён до " + newInterval + " сек.");
+                }
+        ));
+
+        // ── Special: keep inventory toggle ────────────────────────────────────
+
+        events.add(new VotingEvent(
+                "Переключить keepInventory",
+                server -> {
+                    boolean current = server.getGameRules().getBoolean(GameRules.RULE_KEEPINVENTORY);
+                    server.getGameRules().getRule(GameRules.RULE_KEEPINVENTORY).set(!current, server);
+                    broadcast(server, "keepInventory " + (!current
+                            ? "включён! Предметы сохраняются при смерти."
+                            : "выключен! Предметы снова теряются при смерти."));
+                }
+        ));
+
+        // ── Special: passive aggression ────────────────────────────────────────
+
+        events.add(new VotingEvent(
+                "Пассивная агрессия",
+                server -> {
+                    long duration = 10L * 60 * 1000;
+                    HostileVillagersHandler.activate(server, duration);
+                    broadcast(server, "Пассивная агрессия! Жители разозлились и нападают на игроков 10 минут!");
                 }
         ));
 

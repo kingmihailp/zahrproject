@@ -146,6 +146,7 @@ public class EventTimerHud {
         if (name.contains("дном"))    return 0xFFFF6060; // Все вверх дном      → red
         if (name.contains("Мидас"))   return 0xFFFFD700; // Мидас               → gold
         if (name.contains("детство")) return 0xFF5BC0FF; // Обратно в детство   → light blue
+        if (name.contains("агресс"))  return 0xFFBB7733; // Пассивная агрессия  → brown
         return 0xFF88FF88;                                // fallback             → green
     }
 
