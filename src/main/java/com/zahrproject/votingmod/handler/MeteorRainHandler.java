@@ -127,10 +127,10 @@ public class MeteorRainHandler {
         BlockPos spawnPos = BlockPos.containing(spawnX, spawnY, spawnZ);
         FallingBlockEntity meteor = FallingBlockEntity.fall(level, spawnPos, state);
 
-        // cancelDrop = true → entity simply discards on landing without placing
-        // the block or dropping an item; we handle placement ourselves.
-        meteor.cancelDrop = true;
-        meteor.dropItem   = false;
+        // Prevent the block from being dropped as an item if it can't be placed.
+        // FallingBlockEntity will still place the block on landing; we remove it
+        // ourselves in the tick handler before triggering the explosion.
+        meteor.dropItem = false;
 
         // Diagonal velocity aimed near the player (with slight spread)
         double targX = player.getX() + (RANDOM.nextDouble() - 0.5) * 6;
@@ -176,18 +176,32 @@ public class MeteorRainHandler {
                 ServerLevel level = server.getLevel(data.dimension);
                 if (level == null) continue;
 
-                // entity.position() / blockPosition() remain valid after discard
-                Vec3 pos  = entity.position();
+                // entity fields (position, blockPosition) remain valid after discard
+                Vec3 pos = entity.position();
                 BlockPos bp = entity.blockPosition();
 
-                if (data.isDiamond) {
-                    // Place reward if there is room (air or replaceable block)
-                    if (level.getBlockState(bp).canBeReplaced()) {
-                        level.setBlock(bp, Blocks.DEEPSLATE_DIAMOND_ORE.defaultBlockState(), 3);
-                    }
+                // FallingBlockEntity may have placed magma/ore on landing — remove it
+                // so the explosion isn't blocked by our own block.
+                BlockState placed = level.getBlockState(bp);
+                if (placed.is(Blocks.MAGMA_BLOCK) || placed.is(Blocks.DEEPSLATE_DIAMOND_ORE)) {
+                    level.removeBlock(bp, false);
                 }
 
+                // Explosion first, then place diamond ore into the resulting crater.
                 level.explode(null, pos.x, pos.y, pos.z, 2.0f, Level.ExplosionInteraction.BLOCK);
+
+                if (data.isDiamond) {
+                    // Place reward at the impact point if the explosion left room.
+                    if (level.getBlockState(bp).canBeReplaced()) {
+                        level.setBlock(bp, Blocks.DEEPSLATE_DIAMOND_ORE.defaultBlockState(), 3);
+                    } else {
+                        // Try one block below (bottom of the small crater).
+                        BlockPos below = bp.below();
+                        if (level.getBlockState(below).canBeReplaced()) {
+                            level.setBlock(below, Blocks.DEEPSLATE_DIAMOND_ORE.defaultBlockState(), 3);
+                        }
+                    }
+                }
                 continue;
             }
 
