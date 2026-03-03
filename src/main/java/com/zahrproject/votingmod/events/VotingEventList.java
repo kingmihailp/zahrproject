@@ -980,14 +980,14 @@ public class VotingEventList {
                 }
         ));
 
-        // ── Special: inventory lock (hotbar-only) ─────────────────────────────
+        // ── Special: clear all main inventory slots, restore after timer ─────
 
         events.add(new VotingEvent(
                 "Нехватка места",
                 server -> {
-                    long duration = 10L * 60 * 1000;
+                    long duration = 2 * 60 * 1000L;
                     InventoryLockHandler.activate(server, duration);
-                    broadcast(server, "Нехватка места! У всех игроков остался только хот-бар на 10 минут. Остальные предметы вернутся потом!");
+                    broadcast(server, "Нехватка места! Весь инвентарь игроков исчез на 2 минуты. Вернётся потом!");
                 }
         ));
 

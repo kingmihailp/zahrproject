@@ -21,15 +21,16 @@ import java.util.concurrent.TimeUnit;
 /**
  * Manages the "Нехватка места" event:
  *
- *   Items from all non-hotbar slots (main inventory 9-35, armor 36-39,
- *   offhand 40) are removed from the player's inventory and stored safely
- *   in their persistent NBT data.  Only the 9 hotbar slots remain usable.
+ *   ALL items from the main inventory (hotbar slots 0-8 + main slots 9-35,
+ *   i.e. the full 36-slot {@code items} list) are removed and stored safely
+ *   in the player's persistent NBT data.  Armor (36-39) and offhand (40)
+ *   slots are left untouched.
  *
- *   After 10 minutes the hidden items are restored to their original slots.
- *   If a slot was re-occupied by the player, overflow items go to the first
- *   free slot or are dropped at the player's feet.
+ *   After the timer the hidden items are restored to their original slots.
+ *   If a slot was re-occupied, overflow items go to the first free slot or
+ *   are dropped at the player's feet.
  *
- *   The hidden items are never dropped on death and survive server restarts.
+ *   Items survive server restarts and player reconnects via NBT storage.
  */
 public class InventoryLockHandler {
 
@@ -120,14 +121,16 @@ public class InventoryLockHandler {
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     /**
-     * Move all items outside the hotbar (slots 9-40) into the player's persistent
-     * NBT, leaving those slots empty.
+     * Move all items from the main inventory (hotbar 0-8 + main 9-35) into
+     * the player's persistent NBT, leaving those slots empty.
+     * Armor and offhand slots are not touched.
      */
     private static void hideNonHotbarItems(ServerPlayer player) {
         ListTag hidden = new ListTag();
         Inventory inv  = player.getInventory();
 
-        for (int i = 9; i <= 40; i++) {
+        // inv.items covers all 36 main slots (hotbar 0-8, main 9-35).
+        for (int i = 0; i < inv.items.size(); i++) {
             ItemStack stack = inv.getItem(i);
             if (stack.isEmpty()) continue;
             CompoundTag entry = stack.save(new CompoundTag());
