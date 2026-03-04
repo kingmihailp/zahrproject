@@ -8,6 +8,7 @@ import com.zahrproject.votingmod.handler.HardcoreModeHandler;
 import com.zahrproject.votingmod.handler.HostileVillagersHandler;
 import com.zahrproject.votingmod.handler.InventoryLockHandler;
 import com.zahrproject.votingmod.handler.JailHandler;
+import com.zahrproject.votingmod.handler.ArmorStandLorHandler;
 import com.zahrproject.votingmod.handler.MeteorRainHandler;
 import com.zahrproject.votingmod.handler.RaiderWaveHandler;
 import com.zahrproject.votingmod.network.EventTimerPacket;
@@ -1011,6 +1012,16 @@ public class VotingEventList {
                 server -> {
                     MeteorRainHandler.activate(server);
                     broadcast(server, "Метеоритный дождь! Уклоняйтесь от падающих метеоритов!");
+                }
+        ));
+
+        // ── Special: armor stand lore ─────────────────────────────────────────
+
+        events.add(new VotingEvent(
+                "Лор стойки для брони…",
+                server -> {
+                    ArmorStandLorHandler.activate(server);
+                    broadcast(server, "Лор стойки для брони… Она пришла за тобой.");
                 }
         ));
 
