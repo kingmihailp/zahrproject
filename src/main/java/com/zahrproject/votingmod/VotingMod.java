@@ -1,6 +1,7 @@
 package com.zahrproject.votingmod;
 
 import com.mojang.logging.LogUtils;
+import com.zahrproject.votingmod.client.BlackHoleRenderer;
 import com.zahrproject.votingmod.client.ChildRenderHandler;
 import com.zahrproject.votingmod.client.EventTimerHud;
 import com.zahrproject.votingmod.client.GoldenOverlayLayer;
@@ -10,6 +11,7 @@ import com.zahrproject.votingmod.client.ScreenFlipHandler;
 import com.zahrproject.votingmod.client.SkateboardRenderHandler;
 import com.zahrproject.votingmod.command.VotingCommand;
 import com.zahrproject.votingmod.enchantments.ModEnchantments;
+import com.zahrproject.votingmod.entity.ModEntities;
 import com.zahrproject.votingmod.item.ModItems;
 import com.zahrproject.votingmod.sound.ModSounds;
 import com.zahrproject.votingmod.events.ChildEventManager;
@@ -26,6 +28,8 @@ import com.zahrproject.votingmod.handler.SkateboardHandler;
 import com.zahrproject.votingmod.handler.SuperPickaxeHandler;
 import com.zahrproject.votingmod.handler.XShotHandler;
 import com.zahrproject.votingmod.network.ModNetwork;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.client.event.EntityRenderersEvent;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.event.server.ServerStartingEvent;
@@ -51,6 +55,7 @@ public class VotingMod {
         ModEnchantments.ENCHANTMENTS.register(modEventBus);
         ModItems.ITEMS.register(modEventBus);
         ModSounds.SOUNDS.register(modEventBus);
+        ModEntities.ENTITIES.register(modEventBus);
         MinecraftForge.EVENT_BUS.register(this);
         MinecraftForge.EVENT_BUS.register(new FlipScreenTracker());
         MinecraftForge.EVENT_BUS.register(new ForgeEventHandler());
@@ -102,5 +107,13 @@ public class VotingMod {
     public void onServerStopping(ServerStoppingEvent event) {
         VotingManager.getInstance().stop();
         LOGGER.info("[VotingMod] Voting manager stopped.");
+    }
+
+    @Mod.EventBusSubscriber(modid = MOD_ID, bus = Mod.EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
+    public static class ClientModEvents {
+        @SubscribeEvent
+        public static void onRegisterRenderers(EntityRenderersEvent.RegisterRenderers event) {
+            event.registerEntityRenderer(ModEntities.BLACK_HOLE.get(), BlackHoleRenderer::new);
+        }
     }
 }

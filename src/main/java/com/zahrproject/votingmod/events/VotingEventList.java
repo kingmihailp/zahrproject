@@ -8,6 +8,7 @@ import com.zahrproject.votingmod.handler.HardcoreModeHandler;
 import com.zahrproject.votingmod.handler.HostileVillagersHandler;
 import com.zahrproject.votingmod.handler.InventoryLockHandler;
 import com.zahrproject.votingmod.handler.JailHandler;
+import com.zahrproject.votingmod.entity.BlackHoleEntity;
 import com.zahrproject.votingmod.handler.ArmorStandLorHandler;
 import com.zahrproject.votingmod.handler.MeteorRainHandler;
 import com.zahrproject.votingmod.item.ModItems;
@@ -1104,6 +1105,24 @@ public class VotingEventList {
                         players.get(i).teleportTo(xs[i], ys[i], zs[i]);
                     }
                     broadcast(server, "Флиппер! Все игроки обменялись позициями!");
+                }
+        ));
+
+        // ── Special: black holes ──────────────────────────────────────────────
+
+        events.add(new VotingEvent(
+                "Черные дыры",
+                server -> {
+                    for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                        double angle = RANDOM.nextDouble() * 2 * Math.PI;
+                        double dist = 8.0 + RANDOM.nextDouble() * 6.0;
+                        double x = player.getX() + Math.cos(angle) * dist;
+                        double z = player.getZ() + Math.sin(angle) * dist;
+                        double y = player.getY();
+                        BlackHoleEntity bh = BlackHoleEntity.create(player.level(), x, y, z);
+                        player.level().addFreshEntity(bh);
+                    }
+                    broadcast(server, "Черные дыры! Бросьте звезду незера в черную дыру, чтобы уничтожить её!");
                 }
         ));
 
