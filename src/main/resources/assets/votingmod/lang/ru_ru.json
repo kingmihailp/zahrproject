@@ -3,5 +3,6 @@
   "enchantment.votingmod.skateboard": "Скейтборд",
   "item.votingmod.voting_disc": "Пластинка голосования",
   "item.minecraft.record.votingmod.music.disc.voting": "Играет: голосование",
-  "item.votingmod.voting_disc.desc": "лучше не включать это"
+  "item.votingmod.voting_disc.desc": "лучше не включать это",
+  "enchantment.votingmod.xshot": "X-выстрел"
 }

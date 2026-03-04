@@ -13,4 +13,7 @@ public class ModEnchantments {
 
     public static final RegistryObject<Enchantment> SKATEBOARD =
             ENCHANTMENTS.register("skateboard", SkateboardEnchantment::new);
+
+    public static final RegistryObject<Enchantment> XSHOT =
+            ENCHANTMENTS.register("xshot", XShotEnchantment::new);
 }

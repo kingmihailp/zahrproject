@@ -1041,6 +1041,41 @@ public class VotingEventList {
                 }
         ));
 
+        // ── Special: random event ─────────────────────────────────────────────
+
+        events.add(new VotingEvent(
+                "???",
+                server -> {
+                    List<VotingEvent> pool = new ArrayList<>();
+                    for (VotingEvent e : buildEventList()) {
+                        if (!e.getDescription().equals("???")) {
+                            pool.add(e);
+                        }
+                    }
+                    if (!pool.isEmpty()) {
+                        pool.get(RANDOM.nextInt(pool.size())).execute(server);
+                    }
+                }
+        ));
+
+        // ── Special: X-shot enchanted book ───────────────────────────────────
+
+        events.add(new VotingEvent(
+                "Выдать всем игрокам зачарованную книгу «X-выстрел»",
+                server -> {
+                    for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                        ItemStack book = new ItemStack(Items.ENCHANTED_BOOK);
+                        EnchantedBookItem.addEnchantment(book,
+                                new EnchantmentInstance(ModEnchantments.XSHOT.get(), 1));
+                        if (!player.getInventory().add(book)) {
+                            player.drop(book, false);
+                        }
+                    }
+                    broadcast(server, "Все получили зачарованную книгу «X-выстрел»! "
+                            + "Зачаруйте арбалет — и он выстрелит 10 стрелами сразу!");
+                }
+        ));
+
         return events;
     }
 
