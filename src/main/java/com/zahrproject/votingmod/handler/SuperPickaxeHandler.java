@@ -53,7 +53,7 @@ public class SuperPickaxeHandler {
 
         BlockPos center = event.getPos();
         ServerLevel level = player.serverLevel();
-        Direction face = detectFace(player, center);
+        Direction face = detectFace(player);
 
         ACTIVE.set(true);
         try {
@@ -85,15 +85,15 @@ public class SuperPickaxeHandler {
      * Detect which face of the block the player is hitting by comparing
      * the player's eye position to the block center.
      */
-    private static Direction detectFace(ServerPlayer player, BlockPos pos) {
-        Vec3 diff = player.getEyePosition().subtract(Vec3.atCenterOf(pos));
-        double ax = Math.abs(diff.x);
-        double ay = Math.abs(diff.y);
-        double az = Math.abs(diff.z);
+    private static Direction detectFace(ServerPlayer player) {
+        Vec3 look = player.getLookAngle();
+        double ax = Math.abs(look.x);
+        double ay = Math.abs(look.y);
+        double az = Math.abs(look.z);
 
-        if (ay > ax && ay > az) return diff.y > 0 ? Direction.UP   : Direction.DOWN;
-        if (ax > az)            return diff.x > 0 ? Direction.EAST  : Direction.WEST;
-        return                         diff.z > 0 ? Direction.SOUTH : Direction.NORTH;
+        if (ay > ax && ay > az) return look.y > 0 ? Direction.UP   : Direction.DOWN;
+        if (ax > az)            return look.x > 0 ? Direction.EAST  : Direction.WEST;
+        return                         look.z > 0 ? Direction.SOUTH : Direction.NORTH;
     }
 
     /**
