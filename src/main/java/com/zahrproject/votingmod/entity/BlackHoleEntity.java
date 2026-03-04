@@ -22,20 +22,31 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.network.NetworkHooks;
 
 import java.util.List;
+import java.util.Random;
 
 /**
  * "Черные дыры" event entity.
  *
  * Behaviour (server-side only):
- *   • Grows indefinitely, pulling nearby entities and destroying blocks.
- *   • Entities inside the core take lethal damage.
+ *   • Grows indefinitely; all destruction scales with size.
+ *   • Pulls entities with force ∝ size² / dist².
+ *   • Entities inside the event horizon take lethal damage.
+ *   • Blocks destroyed every 2 ticks: aggressively inside, moderately in outer band.
  *   • Bedrock and command blocks are immune.
- *   • A dropped Nether Star that reaches the core triggers an explosion.
+ *   • Nether Star item within striking range → giant explosion.
+ *
+ * Visual:
+ *   • SQUID_INK sphere shell — the round black body.
+ *   • PORTAL flat accretion disk — rotating ring in the equatorial plane.
+ *   • SMOKE tendrils — pulled from all directions toward center.
+ *   • LARGE_SMOKE at the core.
  */
 public class BlackHoleEntity extends Entity {
 
     private static final EntityDataAccessor<Float> DATA_SIZE =
             SynchedEntityData.defineId(BlackHoleEntity.class, EntityDataSerializers.FLOAT);
+
+    private static final Random RNG = new Random();
 
     private int age = 0;
 
@@ -59,7 +70,7 @@ public class BlackHoleEntity extends Entity {
         this.entityData.define(DATA_SIZE, 1.5f);
     }
 
-    public float getHoleSize() { return this.entityData.get(DATA_SIZE); }
+    public float getHoleSize()      { return this.entityData.get(DATA_SIZE); }
     private void setHoleSize(float s) { this.entityData.set(DATA_SIZE, s); }
 
     // ── Tick ─────────────────────────────────────────────────────────────────
@@ -74,18 +85,18 @@ public class BlackHoleEntity extends Entity {
         ServerLevel serverLevel = (ServerLevel) this.level();
         float size = getHoleSize();
 
-        // 1. Grow
-        setHoleSize(size + 0.004f);
+        // 1. Grow — faster over time because size itself grows
+        setHoleSize(size + 0.01f);
 
         Vec3 center = this.position();
 
-        // 2. Particles (visual)
+        // 2. Particles
         spawnParticles(serverLevel, center, size);
 
         // 3. Pull & damage entities
-        double pullRadius = size * 10.0;
-        double coreRadius = size * 1.0;
-        double damageRadius = size * 2.5;
+        double pullRadius  = size * 15.0;
+        double coreRadius  = size * 1.0;
+        double damageRadius = size * 3.0;
 
         List<Entity> nearby = serverLevel.getEntities(this,
                 new AABB(center, center).inflate(pullRadius));
@@ -96,15 +107,15 @@ public class BlackHoleEntity extends Entity {
             Vec3 delta = center.subtract(entity.position());
             double dist = Math.max(delta.length(), 0.01);
 
-            // Nether Star inside pull radius → explode
+            // Nether Star → explode
             if (entity instanceof ItemEntity item && item.getItem().is(Items.NETHER_STAR)) {
-                if (dist <= coreRadius + 1.5) {
+                if (dist <= coreRadius + 2.0) {
                     explode(serverLevel);
                     return;
                 }
             }
 
-            // Core: lethal
+            // Event horizon: instant death / discard
             if (dist <= coreRadius) {
                 if (entity instanceof LivingEntity living) {
                     living.hurt(serverLevel.damageSources().magic(), Float.MAX_VALUE);
@@ -114,18 +125,18 @@ public class BlackHoleEntity extends Entity {
                 continue;
             }
 
-            // Damage zone
+            // Damage zone: heavy continuous damage
             if (entity instanceof LivingEntity living && dist <= damageRadius) {
-                living.hurt(serverLevel.damageSources().magic(), size * 3.0f);
+                living.hurt(serverLevel.damageSources().magic(), size * 5.0f);
             }
 
-            // Pull force: scales with size², falls off with dist²
-            double force = Math.min((size * size * 0.08) / (dist * dist), 3.0);
+            // Pull force: F = size² * k / dist²   (capped to prevent teleport glitch)
+            double force = Math.min((size * size * 0.20) / (dist * dist), 6.0);
             entity.setDeltaMovement(entity.getDeltaMovement().add(delta.normalize().scale(force)));
         }
 
-        // 4. Destroy surrounding blocks (every 4 ticks)
-        if (age % 4 == 0) {
+        // 4. Destroy blocks — every 2 ticks; both inner and outer bands
+        if (age % 2 == 0) {
             destroyBlocks(serverLevel, size);
         }
     }
@@ -133,15 +144,27 @@ public class BlackHoleEntity extends Entity {
     // ── Block destruction ────────────────────────────────────────────────────
 
     private void destroyBlocks(ServerLevel level, float size) {
-        double radius = Math.min(size * 4.0, 64.0);
-        int count = Math.max(2, (int) (size * 10));
         BlockPos center = this.blockPosition();
 
+        // Inner zone (0 → size*3): very aggressive — scales quadratically with size
+        int innerCount = Math.max(4, (int) (size * size * 3));
+        destroyRandom(level, center, 0, size * 3.0, innerCount);
+
+        // Outer zone (size*3 → size*8): moderate — scales linearly
+        int outerCount = Math.max(2, (int) (size * 20));
+        destroyRandom(level, center, size * 3.0, Math.min(size * 8.0, 80.0), outerCount);
+    }
+
+    /**
+     * Pick {@code count} random block positions uniformly within a spherical shell
+     * [minR, maxR] and destroy non-immune blocks.
+     */
+    private void destroyRandom(ServerLevel level, BlockPos center,
+                                double minR, double maxR, int count) {
         for (int i = 0; i < count; i++) {
-            // Uniform random point in sphere
-            double r = radius * Math.cbrt(Math.random());
-            double theta = Math.random() * 2 * Math.PI;
-            double phi = Math.acos(2 * Math.random() - 1);
+            double r = minR + (maxR - minR) * Math.cbrt(RNG.nextDouble());
+            double phi   = Math.acos(2 * RNG.nextDouble() - 1);
+            double theta = RNG.nextDouble() * 2 * Math.PI;
 
             int dx = (int) (r * Math.sin(phi) * Math.cos(theta));
             int dy = (int) (r * Math.cos(phi));
@@ -149,9 +172,7 @@ public class BlackHoleEntity extends Entity {
 
             BlockPos pos = center.offset(dx, dy, dz);
             BlockState state = level.getBlockState(pos);
-
-            if (state.isAir()) continue;
-            if (isImmune(state)) continue;
+            if (state.isAir() || isImmune(state)) continue;
 
             level.destroyBlock(pos, false);
         }
@@ -168,45 +189,69 @@ public class BlackHoleEntity extends Entity {
 
     // ── Particles ────────────────────────────────────────────────────────────
 
-    private void spawnParticles(ServerLevel level, Vec3 center, float size) {
-        // Dark core: SQUID_INK spiraling inward
-        int coreCount = (int) (size * 8);
-        for (int i = 0; i < coreCount; i++) {
-            double a = Math.random() * 2 * Math.PI;
-            double r = size * (0.3 + Math.random() * 0.9);
-            double px = center.x + Math.cos(a) * r;
-            double py = center.y + (Math.random() - 0.5) * r;
-            double pz = center.z + Math.sin(a) * r;
-            double vx = (center.x - px) * 0.08;
-            double vy = (center.y - py) * 0.08;
-            double vz = (center.z - pz) * 0.08;
-            level.sendParticles(ParticleTypes.SQUID_INK, px, py, pz, 0, vx, vy, vz, 1.0);
+    private void spawnParticles(ServerLevel level, Vec3 c, float size) {
+
+        // ── Layer 1: SQUID_INK sphere shell — the round black body ───────────
+        //   Uniform on sphere surface via spherical coordinates.
+        int sphereCount = (int) (size * 24);
+        for (int i = 0; i < sphereCount; i++) {
+            double[] p = spherePoint(c, size * (0.85 + RNG.nextDouble() * 0.3));
+            double vx = (c.x - p[0]) * 0.06;
+            double vy = (c.y - p[1]) * 0.06;
+            double vz = (c.z - p[2]) * 0.06;
+            level.sendParticles(ParticleTypes.SQUID_INK, p[0], p[1], p[2], 0, vx, vy, vz, 1.0);
         }
 
-        // Outer swirl: PORTAL
-        int swirlCount = (int) (size * 16);
-        for (int i = 0; i < swirlCount; i++) {
-            double a = age * 0.04 + i * (2 * Math.PI / swirlCount);
-            double r = size * (2.0 + Math.random() * 3.0);
-            double px = center.x + Math.cos(a) * r;
-            double py = center.y + (Math.random() - 0.5) * size * 0.8;
-            double pz = center.z + Math.sin(a) * r;
-            double vx = (center.x - px) * 0.04;
-            double vz = (center.z - pz) * 0.04;
-            level.sendParticles(ParticleTypes.PORTAL, px, py, pz, 0, vx, 0, vz, 1.0);
+        // ── Layer 2: PORTAL accretion disk — flat rotating ring ──────────────
+        //   Disk lies in the XZ plane (realistic black hole look).
+        int diskCount = (int) (size * 30);
+        for (int i = 0; i < diskCount; i++) {
+            double a = age * 0.05 + i * (2 * Math.PI / diskCount);
+            double r = size * (1.6 + RNG.nextDouble() * 4.0);
+            double px = c.x + Math.cos(a) * r;
+            double py = c.y + (RNG.nextDouble() - 0.5) * size * 0.25; // very flat
+            double pz = c.z + Math.sin(a) * r;
+            double vx = (c.x - px) * 0.07;
+            double vz = (c.z - pz) * 0.07;
+            level.sendParticles(ParticleTypes.PORTAL, px, py, pz, 0, vx, 0.0, vz, 1.0);
         }
 
-        // Large smoke at center
+        // ── Layer 3: SMOKE tendrils — pulled from all directions ─────────────
+        //   Full 3D sphere of incoming smoke particles (gives "eating" look).
+        int tendrilCount = (int) (size * 18);
+        for (int i = 0; i < tendrilCount; i++) {
+            double[] p = spherePoint(c, size * (3.0 + RNG.nextDouble() * 5.0));
+            double vx = (c.x - p[0]) * 0.05;
+            double vy = (c.y - p[1]) * 0.05;
+            double vz = (c.z - p[2]) * 0.05;
+            level.sendParticles(ParticleTypes.SMOKE, p[0], p[1], p[2], 0, vx, vy, vz, 1.0);
+        }
+
+        // ── Layer 4: LARGE_SMOKE at the core ─────────────────────────────────
         level.sendParticles(ParticleTypes.LARGE_SMOKE,
-                center.x, center.y, center.z,
-                (int) (size * 2), size * 0.4, size * 0.4, size * 0.4, 0.01);
+                c.x, c.y, c.z,
+                Math.max(1, (int) (size * 3)), 0.0, 0.0, 0.0, 0.02);
+    }
+
+    /**
+     * Random point on a sphere surface of radius {@code r} centered at {@code c}.
+     * Uses the uniform spherical distribution: phi = acos(2U-1), theta = 2πV.
+     */
+    private static double[] spherePoint(Vec3 c, double r) {
+        double phi   = Math.acos(2 * RNG.nextDouble() - 1);
+        double theta = RNG.nextDouble() * 2 * Math.PI;
+        return new double[]{
+                c.x + r * Math.sin(phi) * Math.cos(theta),
+                c.y + r * Math.cos(phi),
+                c.z + r * Math.sin(phi) * Math.sin(theta)
+        };
     }
 
     // ── Explosion ────────────────────────────────────────────────────────────
 
     private void explode(ServerLevel level) {
         Vec3 pos = this.position();
-        float power = Math.max(getHoleSize() * 4.0f, 10.0f);
+        float power = Math.max(getHoleSize() * 5.0f, 12.0f);
         level.explode(this, pos.x, pos.y, pos.z, power, Level.ExplosionInteraction.TNT);
         this.discard();
     }
@@ -232,12 +277,7 @@ public class BlackHoleEntity extends Entity {
         return NetworkHooks.getEntitySpawningPacket(this);
     }
 
-    @Override
-    public boolean isPickable() { return false; }
-
-    @Override
-    public boolean isPushable() { return false; }
-
-    @Override
-    public boolean isInvulnerable() { return true; }
+    @Override public boolean isPickable()    { return false; }
+    @Override public boolean isPushable()    { return false; }
+    @Override public boolean isInvulnerable() { return true; }
 }
