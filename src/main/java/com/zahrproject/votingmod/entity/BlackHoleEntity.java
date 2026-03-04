@@ -1,5 +1,6 @@
 package com.zahrproject.votingmod.entity;
 
+import com.mojang.math.Transformation;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
@@ -9,6 +10,7 @@ import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.Display;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
@@ -20,26 +22,29 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.network.NetworkHooks;
+import org.joml.Quaternionf;
+import org.joml.Vector3f;
 
 import java.util.List;
 import java.util.Random;
+import java.util.UUID;
 
 /**
  * "Черные дыры" event entity.
  *
- * Behaviour (server-side only):
- *   • Grows indefinitely; all destruction scales with size.
- *   • Pulls entities with force ∝ size² / dist².
- *   • Entities inside the event horizon take lethal damage.
- *   • Blocks destroyed every 2 ticks: aggressively inside, moderately in outer band.
- *   • Bedrock and command blocks are immune.
- *   • Nether Star item within striking range → giant explosion.
- *
  * Visual:
- *   • SQUID_INK sphere shell — the round black body.
- *   • PORTAL flat accretion disk — rotating ring in the equatorial plane.
- *   • SMOKE tendrils — pulled from all directions toward center.
- *   • LARGE_SMOKE at the core.
+ *   • Rotating, scaling BlockDisplay (coal block) as the black body.
+ *   • Thin PORTAL accretion disk in the equatorial plane.
+ *   • SMOKE tendrils pulled from 3-D sphere toward center.
+ *   • LARGE_SMOKE at core.
+ *
+ * Mechanics:
+ *   • Grows every tick; all force/destruction scales with size.
+ *   • Entities are pulled toward center; killed ONLY when they reach
+ *     the very center (dist ≤ 1.5).
+ *   • Blocks destroyed in two concentric spherical zones every 2 ticks.
+ *   • Bedrock / command blocks immune.
+ *   • Nether Star item near core → massive explosion.
  */
 public class BlackHoleEntity extends Entity {
 
@@ -49,6 +54,7 @@ public class BlackHoleEntity extends Entity {
     private static final Random RNG = new Random();
 
     private int age = 0;
+    private UUID displayUUID = null; // the BlockDisplay entity
 
     // ── Construction ─────────────────────────────────────────────────────────
 
@@ -70,7 +76,7 @@ public class BlackHoleEntity extends Entity {
         this.entityData.define(DATA_SIZE, 1.5f);
     }
 
-    public float getHoleSize()      { return this.entityData.get(DATA_SIZE); }
+    public float getHoleSize()       { return this.entityData.get(DATA_SIZE); }
     private void setHoleSize(float s) { this.entityData.set(DATA_SIZE, s); }
 
     // ── Tick ─────────────────────────────────────────────────────────────────
@@ -85,18 +91,21 @@ public class BlackHoleEntity extends Entity {
         ServerLevel serverLevel = (ServerLevel) this.level();
         float size = getHoleSize();
 
-        // 1. Grow — faster over time because size itself grows
+        // 1. Grow
         setHoleSize(size + 0.01f);
 
         Vec3 center = this.position();
 
-        // 2. Particles
+        // 2. Spawn / update BlockDisplay visual
+        updateBlockDisplay(serverLevel, center, size);
+
+        // 3. Particles (accretion disk + smoke tendrils)
         spawnParticles(serverLevel, center, size);
 
-        // 3. Pull & damage entities
+        // 4. Pull entities; kill only at very center
         double pullRadius  = size * 15.0;
-        double coreRadius  = size * 1.0;
-        double damageRadius = size * 3.0;
+        double killRadius  = 1.5;          // fixed — only the very center
+        double damageRadius = size * 2.0;  // mild damage warning zone
 
         List<Entity> nearby = serverLevel.getEntities(this,
                 new AABB(center, center).inflate(pullRadius));
@@ -107,16 +116,16 @@ public class BlackHoleEntity extends Entity {
             Vec3 delta = center.subtract(entity.position());
             double dist = Math.max(delta.length(), 0.01);
 
-            // Nether Star → explode
+            // Nether Star near center → explode
             if (entity instanceof ItemEntity item && item.getItem().is(Items.NETHER_STAR)) {
-                if (dist <= coreRadius + 2.0) {
+                if (dist <= killRadius + 1.0) {
                     explode(serverLevel);
                     return;
                 }
             }
 
-            // Event horizon: instant death / discard
-            if (dist <= coreRadius) {
+            // Reached the very center → instant death
+            if (dist <= killRadius) {
                 if (entity instanceof LivingEntity living) {
                     living.hurt(serverLevel.damageSources().magic(), Float.MAX_VALUE);
                 } else {
@@ -125,44 +134,75 @@ public class BlackHoleEntity extends Entity {
                 continue;
             }
 
-            // Damage zone: heavy continuous damage
+            // Damage warning zone (but no instant kill)
             if (entity instanceof LivingEntity living && dist <= damageRadius) {
-                living.hurt(serverLevel.damageSources().magic(), size * 5.0f);
+                living.hurt(serverLevel.damageSources().magic(), size * 2.0f);
             }
 
-            // Pull force: F = size² * k / dist²   (capped to prevent teleport glitch)
+            // Pull force: F = size² * k / dist²  (capped)
             double force = Math.min((size * size * 0.20) / (dist * dist), 6.0);
             entity.setDeltaMovement(entity.getDeltaMovement().add(delta.normalize().scale(force)));
         }
 
-        // 4. Destroy blocks — every 2 ticks; both inner and outer bands
+        // 5. Destroy blocks every 2 ticks (scales with size)
         if (age % 2 == 0) {
             destroyBlocks(serverLevel, size);
         }
     }
 
+    // ── BlockDisplay ─────────────────────────────────────────────────────────
+
+    private void updateBlockDisplay(ServerLevel level, Vec3 center, float size) {
+        // Lazy-spawn
+        if (displayUUID == null) {
+            Display.BlockDisplay display = new Display.BlockDisplay(EntityType.BLOCK_DISPLAY, level);
+            display.setPos(center.x, center.y, center.z);
+            display.setBlockState(Blocks.COAL_BLOCK.defaultBlockState());
+            display.setNoGravity(true);
+            display.setInvisible(false);
+            display.setInterpolationDuration(2);
+            level.addFreshEntity(display);
+            displayUUID = display.getUUID();
+        }
+
+        Entity raw = level.getEntity(displayUUID);
+        if (!(raw instanceof Display.BlockDisplay bd)) return;
+
+        // Keep display co-located with the black hole
+        bd.setPos(center.x, center.y, center.z);
+
+        // Rotating cube: dual-axis spin + scale matching hole size
+        float scale  = size * 2.0f;
+        float yAngle = (float) Math.toRadians(age * 3.0);
+        float xAngle = (float) Math.toRadians(age * 1.7);
+
+        Quaternionf rotation = new Quaternionf().rotateY(yAngle).rotateX(xAngle);
+
+        bd.setTransformation(new Transformation(
+                new Vector3f(-scale * 0.5f, -scale * 0.5f, -scale * 0.5f), // center the cube
+                rotation,
+                new Vector3f(scale, scale, scale),
+                new Quaternionf()                                            // right rotation identity
+        ));
+        bd.setInterpolationDelay(0);
+    }
+
     // ── Block destruction ────────────────────────────────────────────────────
 
     private void destroyBlocks(ServerLevel level, float size) {
-        BlockPos center = this.blockPosition();
-
-        // Inner zone (0 → size*3): very aggressive — scales quadratically with size
+        // Inner zone: quadratic scaling (most blocks eaten here)
         int innerCount = Math.max(4, (int) (size * size * 3));
-        destroyRandom(level, center, 0, size * 3.0, innerCount);
+        destroyRandom(level, this.blockPosition(), 0, size * 3.0, innerCount);
 
-        // Outer zone (size*3 → size*8): moderate — scales linearly
+        // Outer zone: linear scaling
         int outerCount = Math.max(2, (int) (size * 20));
-        destroyRandom(level, center, size * 3.0, Math.min(size * 8.0, 80.0), outerCount);
+        destroyRandom(level, this.blockPosition(), size * 3.0, Math.min(size * 8.0, 80.0), outerCount);
     }
 
-    /**
-     * Pick {@code count} random block positions uniformly within a spherical shell
-     * [minR, maxR] and destroy non-immune blocks.
-     */
     private void destroyRandom(ServerLevel level, BlockPos center,
                                 double minR, double maxR, int count) {
         for (int i = 0; i < count; i++) {
-            double r = minR + (maxR - minR) * Math.cbrt(RNG.nextDouble());
+            double r     = minR + (maxR - minR) * Math.cbrt(RNG.nextDouble());
             double phi   = Math.acos(2 * RNG.nextDouble() - 1);
             double theta = RNG.nextDouble() * 2 * Math.PI;
 
@@ -191,52 +231,33 @@ public class BlackHoleEntity extends Entity {
 
     private void spawnParticles(ServerLevel level, Vec3 c, float size) {
 
-        // ── Layer 1: SQUID_INK sphere shell — the round black body ───────────
-        //   Uniform on sphere surface via spherical coordinates.
-        int sphereCount = (int) (size * 24);
-        for (int i = 0; i < sphereCount; i++) {
-            double[] p = spherePoint(c, size * (0.85 + RNG.nextDouble() * 0.3));
-            double vx = (c.x - p[0]) * 0.06;
-            double vy = (c.y - p[1]) * 0.06;
-            double vz = (c.z - p[2]) * 0.06;
-            level.sendParticles(ParticleTypes.SQUID_INK, p[0], p[1], p[2], 0, vx, vy, vz, 1.0);
-        }
-
-        // ── Layer 2: PORTAL accretion disk — flat rotating ring ──────────────
-        //   Disk lies in the XZ plane (realistic black hole look).
-        int diskCount = (int) (size * 30);
+        // Thin PORTAL accretion disk — compact ring around the coal block
+        int diskCount = (int) (size * 20);
         for (int i = 0; i < diskCount; i++) {
             double a = age * 0.05 + i * (2 * Math.PI / diskCount);
-            double r = size * (1.6 + RNG.nextDouble() * 4.0);
+            double r = size * (1.2 + RNG.nextDouble() * 1.8);        // tighter disk
             double px = c.x + Math.cos(a) * r;
-            double py = c.y + (RNG.nextDouble() - 0.5) * size * 0.25; // very flat
+            double py = c.y + (RNG.nextDouble() - 0.5) * size * 0.15; // very thin
             double pz = c.z + Math.sin(a) * r;
-            double vx = (c.x - px) * 0.07;
-            double vz = (c.z - pz) * 0.07;
-            level.sendParticles(ParticleTypes.PORTAL, px, py, pz, 0, vx, 0.0, vz, 1.0);
+            level.sendParticles(ParticleTypes.PORTAL, px, py, pz, 0,
+                    (c.x - px) * 0.07, 0.0, (c.z - pz) * 0.07, 1.0);
         }
 
-        // ── Layer 3: SMOKE tendrils — pulled from all directions ─────────────
-        //   Full 3D sphere of incoming smoke particles (gives "eating" look).
-        int tendrilCount = (int) (size * 18);
+        // 3-D SMOKE tendrils — pulled from all directions
+        int tendrilCount = (int) (size * 16);
         for (int i = 0; i < tendrilCount; i++) {
-            double[] p = spherePoint(c, size * (3.0 + RNG.nextDouble() * 5.0));
-            double vx = (c.x - p[0]) * 0.05;
-            double vy = (c.y - p[1]) * 0.05;
-            double vz = (c.z - p[2]) * 0.05;
-            level.sendParticles(ParticleTypes.SMOKE, p[0], p[1], p[2], 0, vx, vy, vz, 1.0);
+            double[] p = spherePoint(c, size * (2.5 + RNG.nextDouble() * 4.5));
+            level.sendParticles(ParticleTypes.SMOKE, p[0], p[1], p[2], 0,
+                    (c.x - p[0]) * 0.05, (c.y - p[1]) * 0.05, (c.z - p[2]) * 0.05, 1.0);
         }
 
-        // ── Layer 4: LARGE_SMOKE at the core ─────────────────────────────────
+        // LARGE_SMOKE at core
         level.sendParticles(ParticleTypes.LARGE_SMOKE,
                 c.x, c.y, c.z,
                 Math.max(1, (int) (size * 3)), 0.0, 0.0, 0.0, 0.02);
     }
 
-    /**
-     * Random point on a sphere surface of radius {@code r} centered at {@code c}.
-     * Uses the uniform spherical distribution: phi = acos(2U-1), theta = 2πV.
-     */
+    /** Uniform random point on a sphere surface of radius {@code r} at {@code c}. */
     private static double[] spherePoint(Vec3 c, double r) {
         double phi   = Math.acos(2 * RNG.nextDouble() - 1);
         double theta = RNG.nextDouble() * 2 * Math.PI;
@@ -256,18 +277,35 @@ public class BlackHoleEntity extends Entity {
         this.discard();
     }
 
+    // ── Remove: also discard the display entity ───────────────────────────────
+
+    @Override
+    public void remove(RemovalReason reason) {
+        if (!this.level().isClientSide() && displayUUID != null) {
+            Entity display = ((ServerLevel) this.level()).getEntity(displayUUID);
+            if (display != null) display.discard();
+        }
+        super.remove(reason);
+    }
+
     // ── NBT ──────────────────────────────────────────────────────────────────
 
     @Override
     protected void readAdditionalSaveData(CompoundTag tag) {
         setHoleSize(tag.getFloat("BHSize"));
         age = tag.getInt("BHAge");
+        if (tag.hasUUID("BHDisplay")) {
+            displayUUID = tag.getUUID("BHDisplay");
+        }
     }
 
     @Override
     protected void addAdditionalSaveData(CompoundTag tag) {
         tag.putFloat("BHSize", getHoleSize());
         tag.putInt("BHAge", age);
+        if (displayUUID != null) {
+            tag.putUUID("BHDisplay", displayUUID);
+        }
     }
 
     // ── Misc ─────────────────────────────────────────────────────────────────
@@ -277,7 +315,7 @@ public class BlackHoleEntity extends Entity {
         return NetworkHooks.getEntitySpawningPacket(this);
     }
 
-    @Override public boolean isPickable()    { return false; }
-    @Override public boolean isPushable()    { return false; }
-    @Override public boolean isInvulnerable() { return true; }
+    @Override public boolean isPickable()     { return false; }
+    @Override public boolean isPushable()     { return false; }
+    @Override public boolean isInvulnerable() { return true;  }
 }
