@@ -25,6 +25,7 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.network.NetworkHooks;
 import org.joml.Quaternionf;
 
+import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Random;
 import java.util.UUID;
@@ -53,6 +54,31 @@ public class BlackHoleEntity extends Entity {
             SynchedEntityData.defineId(BlackHoleEntity.class, EntityDataSerializers.FLOAT);
 
     private static final Random RNG = new Random();
+
+    /**
+     * readAdditionalSaveData is protected — cache the Method once and call via
+     * reflection. Walking up the class hierarchy finds whichever class declares it.
+     */
+    private static final Method READ_NBT;
+    static {
+        Method found = null;
+        Class<?> cls = Display.BlockDisplay.class;
+        while (cls != null && found == null) {
+            try {
+                found = cls.getDeclaredMethod("readAdditionalSaveData", CompoundTag.class);
+            } catch (NoSuchMethodException ignored) {
+                cls = cls.getSuperclass();
+            }
+        }
+        if (found != null) found.setAccessible(true);
+        READ_NBT = found;
+    }
+
+    /** Calls readAdditionalSaveData on a Display entity via the cached reflection Method. */
+    private static void applyNbt(Entity entity, CompoundTag tag) {
+        if (READ_NBT == null) return;
+        try { READ_NBT.invoke(entity, tag); } catch (Exception ignored) {}
+    }
 
     private int  age         = 0;
     private UUID displayUUID = null;
@@ -165,7 +191,7 @@ public class BlackHoleEntity extends Entity {
             blockStateTag.putString("Name", "minecraft:coal_block");
             initTag.put("block_state", blockStateTag);
             initTag.putBoolean("NoGravity", true);
-            bd.readAdditionalSaveData(initTag);
+            applyNbt(bd, initTag);
         }
 
         Entity raw = level.getEntity(displayUUID);
@@ -196,7 +222,7 @@ public class BlackHoleEntity extends Entity {
         updateTag.putInt("start_interpolation",    0);
         updateTag.putBoolean("NoGravity", true);
 
-        bd.readAdditionalSaveData(updateTag);
+        applyNbt(bd, updateTag);
     }
 
     /** Builds a ListTag of FloatTags from varargs. */
