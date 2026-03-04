@@ -1,4 +1,6 @@
 {
   "mod.votingmod.name": "Voting Mod",
-  "enchantment.votingmod.skateboard": "Skateboard"
+  "enchantment.votingmod.skateboard": "Skateboard",
+  "item.votingmod.voting_disc": "Voting Disc",
+  "item.minecraft.record.votingmod.music.disc.voting": "Now Playing: Voting"
 }

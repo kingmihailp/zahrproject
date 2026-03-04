@@ -10,6 +10,7 @@ import com.zahrproject.votingmod.handler.InventoryLockHandler;
 import com.zahrproject.votingmod.handler.JailHandler;
 import com.zahrproject.votingmod.handler.ArmorStandLorHandler;
 import com.zahrproject.votingmod.handler.MeteorRainHandler;
+import com.zahrproject.votingmod.item.ModItems;
 import com.zahrproject.votingmod.handler.RaiderWaveHandler;
 import com.zahrproject.votingmod.network.EventTimerPacket;
 import com.zahrproject.votingmod.network.FlipModelPacket;
@@ -1022,6 +1023,21 @@ public class VotingEventList {
                 server -> {
                     ArmorStandLorHandler.activate(server);
                     broadcast(server, "Лор стойки для брони… Она пришла за тобой.");
+                }
+        ));
+
+        // ── Special: voting disc ──────────────────────────────────────────────
+
+        events.add(new VotingEvent(
+                "Выдать всем игрокам пластинку голосования",
+                server -> {
+                    for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                        ItemStack disc = new ItemStack(ModItems.VOTING_DISC.get());
+                        if (!player.getInventory().add(disc)) {
+                            player.drop(disc, false);
+                        }
+                    }
+                    broadcast(server, "Всем игрокам выдана пластинка голосования!");
                 }
         ));
 

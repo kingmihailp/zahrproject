@@ -1,4 +1,6 @@
 {
   "mod.votingmod.name": "Мод Голосования",
-  "enchantment.votingmod.skateboard": "Скейтборд"
+  "enchantment.votingmod.skateboard": "Скейтборд",
+  "item.votingmod.voting_disc": "Пластинка голосования",
+  "item.minecraft.record.votingmod.music.disc.voting": "Играет: голосование"
 }

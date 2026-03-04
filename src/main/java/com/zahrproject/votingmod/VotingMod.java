@@ -10,6 +10,8 @@ import com.zahrproject.votingmod.client.ScreenFlipHandler;
 import com.zahrproject.votingmod.client.SkateboardRenderHandler;
 import com.zahrproject.votingmod.command.VotingCommand;
 import com.zahrproject.votingmod.enchantments.ModEnchantments;
+import com.zahrproject.votingmod.item.ModItems;
+import com.zahrproject.votingmod.sound.ModSounds;
 import com.zahrproject.votingmod.events.ChildEventManager;
 import com.zahrproject.votingmod.handler.FlipModelTracker;
 import com.zahrproject.votingmod.handler.FlipScreenTracker;
@@ -45,6 +47,8 @@ public class VotingMod {
         modEventBus.addListener(this::commonSetup);
         modEventBus.addListener(this::clientSetup);
         ModEnchantments.ENCHANTMENTS.register(modEventBus);
+        ModItems.ITEMS.register(modEventBus);
+        ModSounds.SOUNDS.register(modEventBus);
         MinecraftForge.EVENT_BUS.register(this);
         MinecraftForge.EVENT_BUS.register(new FlipScreenTracker());
         MinecraftForge.EVENT_BUS.register(new ForgeEventHandler());

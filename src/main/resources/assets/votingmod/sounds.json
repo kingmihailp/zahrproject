@@ -1,0 +1,10 @@
+{
+  "music.disc.voting": {
+    "sounds": [
+      {
+        "name": "votingmod:music/voting_disc",
+        "stream": true
+      }
+    ]
+  }
+}
