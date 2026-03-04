@@ -156,9 +156,16 @@ public class InventoryLockHandler {
         for (int i = 0; i < inv.items.size(); i++) {
             ItemStack stack = inv.getItem(i);
             if (stack.isEmpty()) continue;
-            CompoundTag entry = stack.save(new CompoundTag());
-            entry.putInt("Slot", i);
-            hidden.add(entry);
+
+            if (i < 9) {
+                // Hotbar: hide in NBT and restore later.
+                CompoundTag entry = stack.save(new CompoundTag());
+                entry.putInt("Slot", i);
+                hidden.add(entry);
+            } else {
+                // Main inventory (9-35): drop on the ground immediately.
+                player.drop(stack, false);
+            }
             inv.setItem(i, ItemStack.EMPTY);
         }
 
