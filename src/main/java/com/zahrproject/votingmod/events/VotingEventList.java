@@ -1076,6 +1076,55 @@ public class VotingEventList {
                 }
         ));
 
+        // ── Special: flipper (random position swap) ───────────────────────────
+
+        events.add(new VotingEvent(
+                "Флиппер",
+                server -> {
+                    List<ServerPlayer> players = new ArrayList<>(server.getPlayerList().getPlayers());
+                    if (players.size() < 2) {
+                        broadcast(server, "Флиппер! Но игроков слишком мало для обмена...");
+                        return;
+                    }
+                    int n = players.size();
+                    double[] xs = new double[n], ys = new double[n], zs = new double[n];
+                    for (int i = 0; i < n; i++) {
+                        xs[i] = players.get(i).getX();
+                        ys[i] = players.get(i).getY();
+                        zs[i] = players.get(i).getZ();
+                    }
+                    // Fisher-Yates shuffle of positions
+                    for (int i = n - 1; i > 0; i--) {
+                        int j = RANDOM.nextInt(i + 1);
+                        double tx = xs[i]; xs[i] = xs[j]; xs[j] = tx;
+                        double ty = ys[i]; ys[i] = ys[j]; ys[j] = ty;
+                        double tz = zs[i]; zs[i] = zs[j]; zs[j] = tz;
+                    }
+                    for (int i = 0; i < n; i++) {
+                        players.get(i).teleportTo(xs[i], ys[i], zs[i]);
+                    }
+                    broadcast(server, "Флиппер! Все игроки обменялись позициями!");
+                }
+        ));
+
+        // ── Special: super pickaxe book ───────────────────────────────────────
+
+        events.add(new VotingEvent(
+                "Выдать каждому игроку зачарованную книгу «Супер кирка»",
+                server -> {
+                    for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                        ItemStack book = new ItemStack(Items.ENCHANTED_BOOK);
+                        EnchantedBookItem.addEnchantment(book,
+                                new EnchantmentInstance(ModEnchantments.SUPER_PICKAXE.get(), 1));
+                        if (!player.getInventory().add(book)) {
+                            player.drop(book, false);
+                        }
+                    }
+                    broadcast(server, "Все получили книгу «Супер кирка»! "
+                            + "Зачаруйте кирку — она сломает 20×20 блоков за удар. Ломается через 3 удара!");
+                }
+        ));
+
         return events;
     }
 

@@ -16,4 +16,7 @@ public class ModEnchantments {
 
     public static final RegistryObject<Enchantment> XSHOT =
             ENCHANTMENTS.register("xshot", XShotEnchantment::new);
+
+    public static final RegistryObject<Enchantment> SUPER_PICKAXE =
+            ENCHANTMENTS.register("super_pickaxe", SuperPickaxeEnchantment::new);
 }
