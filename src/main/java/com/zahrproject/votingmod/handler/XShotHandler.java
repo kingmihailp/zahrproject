@@ -1,6 +1,7 @@
 package com.zahrproject.votingmod.handler;
 
 import com.zahrproject.votingmod.enchantments.ModEnchantments;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
@@ -82,7 +83,7 @@ public class XShotHandler {
         if (!CrossbowItem.isCharged(crossbow)) return;
         if (!hasXShot(crossbow)) return;
 
-        List<ItemStack> charged = CrossbowItem.getChargedProjectiles(crossbow);
+        List<ItemStack> charged = getChargedProjectiles(crossbow);
         if (charged.isEmpty()) return;
         ItemStack storedAmmo = charged.get(0);
 
@@ -155,6 +156,19 @@ public class XShotHandler {
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /** Reads ChargedProjectiles NBT directly (CrossbowItem.getChargedProjectiles is private). */
+    private static List<ItemStack> getChargedProjectiles(ItemStack crossbow) {
+        List<ItemStack> list = new java.util.ArrayList<>();
+        CompoundTag tag = crossbow.getTag();
+        if (tag != null && tag.contains("ChargedProjectiles", 9)) {
+            ListTag listTag = tag.getList("ChargedProjectiles", 10);
+            for (int i = 0; i < listTag.size(); i++) {
+                list.add(ItemStack.of(listTag.getCompound(i)));
+            }
+        }
+        return list;
+    }
 
     /** Count arrows of matching item type in offhand + all inventory slots. */
     private static int countAmmoInInventory(ServerPlayer player, ItemStack ammo) {
