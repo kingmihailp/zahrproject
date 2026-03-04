@@ -17,7 +17,7 @@ public class SuperPickaxeEnchantment extends Enchantment {
                     item -> item instanceof PickaxeItem);
 
     public SuperPickaxeEnchantment() {
-        super(Rarity.EPIC, PICKAXE_CATEGORY, new EquipmentSlot[]{ EquipmentSlot.MAINHAND });
+        super(Rarity.VERY_RARE, PICKAXE_CATEGORY, new EquipmentSlot[]{ EquipmentSlot.MAINHAND });
     }
 
     @Override public int getMaxLevel() { return 1; }
