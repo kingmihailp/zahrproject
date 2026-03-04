@@ -149,27 +149,13 @@ public class InventoryLockHandler {
      * Armor and offhand slots are not touched.
      */
     private static void hideNonHotbarItems(ServerPlayer player) {
-        ListTag hidden = new ListTag();
-        Inventory inv  = player.getInventory();
-
-        // inv.items covers all 36 main slots (hotbar 0-8, main 9-35).
-        for (int i = 0; i < inv.items.size(); i++) {
+        Inventory inv = player.getInventory();
+        for (int i = 9; i < inv.items.size(); i++) {
             ItemStack stack = inv.getItem(i);
             if (stack.isEmpty()) continue;
-
-            if (i < 9) {
-                // Hotbar: hide in NBT and restore later.
-                CompoundTag entry = stack.save(new CompoundTag());
-                entry.putInt("Slot", i);
-                hidden.add(entry);
-            } else {
-                // Main inventory (9-35): drop on the ground immediately.
-                player.drop(stack, false);
-            }
+            player.drop(stack, false);
             inv.setItem(i, ItemStack.EMPTY);
         }
-
-        player.getPersistentData().put(NBT_HIDDEN, hidden);
         player.inventoryMenu.broadcastChanges();
     }
 
