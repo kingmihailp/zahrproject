@@ -57,18 +57,28 @@ public class BlackHoleEntity extends Entity {
      * Walking up the class hierarchy finds whichever class declares it.
      */
     private static final Method SET_TRANSFORMATION;
+    private static final Method SET_BLOCK_STATE;
     static {
-        Method found = null;
+        Method foundTransform = null;
+        Method foundBlockState = null;
         Class<?> cls = Display.BlockDisplay.class;
-        while (cls != null && found == null) {
-            try {
-                found = cls.getDeclaredMethod("setTransformation", Transformation.class);
-            } catch (NoSuchMethodException ignored) {
-                cls = cls.getSuperclass();
+        while (cls != null && (foundTransform == null || foundBlockState == null)) {
+            if (foundTransform == null) {
+                try {
+                    foundTransform = cls.getDeclaredMethod("setTransformation", Transformation.class);
+                } catch (NoSuchMethodException ignored) {}
             }
+            if (foundBlockState == null) {
+                try {
+                    foundBlockState = cls.getDeclaredMethod("setBlockState", BlockState.class);
+                } catch (NoSuchMethodException ignored) {}
+            }
+            cls = cls.getSuperclass();
         }
-        if (found != null) found.setAccessible(true);
-        SET_TRANSFORMATION = found;
+        if (foundTransform  != null) foundTransform.setAccessible(true);
+        if (foundBlockState != null) foundBlockState.setAccessible(true);
+        SET_TRANSFORMATION = foundTransform;
+        SET_BLOCK_STATE    = foundBlockState;
     }
 
     private int  age         = 0;
@@ -174,7 +184,9 @@ public class BlackHoleEntity extends Entity {
             Display.BlockDisplay bd = new Display.BlockDisplay(EntityType.BLOCK_DISPLAY, level);
             bd.setPos(center.x, center.y, center.z);
             bd.setNoGravity(true);
-            bd.setBlockState(Blocks.COAL_BLOCK.defaultBlockState());
+            if (SET_BLOCK_STATE != null) {
+                try { SET_BLOCK_STATE.invoke(bd, Blocks.COAL_BLOCK.defaultBlockState()); } catch (Exception ignored) {}
+            }
             level.addFreshEntity(bd);
             displayUUID = bd.getUUID();
         }
