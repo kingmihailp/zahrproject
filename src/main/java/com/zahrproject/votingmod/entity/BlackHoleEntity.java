@@ -25,6 +25,7 @@ import net.minecraftforge.network.NetworkHooks;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
+import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Random;
 import java.util.UUID;
@@ -34,7 +35,7 @@ import java.util.UUID;
  *
  * Visual:
  *   • Rotating, growing BlockDisplay (coal block) — block state and transformation
- *     set via direct API calls (setTransformation exposed via AccessTransformer).
+ *     set via reflection looked up by parameter type (obfuscation-safe).
  *   • Thin PORTAL accretion disk in the equatorial plane.
  *
  * Mechanics:
@@ -50,6 +51,25 @@ public class BlackHoleEntity extends Entity {
             SynchedEntityData.defineId(BlackHoleEntity.class, EntityDataSerializers.FLOAT);
 
     private static final Random RNG = new Random();
+
+    /**
+     * Find a single-parameter method by its parameter type, walking up the
+     * class hierarchy. Works regardless of method name obfuscation (SRG/Mojang).
+     */
+    private static Method findByParamType(Class<?> startClass, Class<?> paramType) {
+        for (Class<?> cls = startClass; cls != null; cls = cls.getSuperclass()) {
+            for (Method m : cls.getDeclaredMethods()) {
+                if (m.getParameterCount() == 1 && m.getParameterTypes()[0] == paramType) {
+                    m.setAccessible(true);
+                    return m;
+                }
+            }
+        }
+        return null;
+    }
+
+    private static final Method SET_BLOCK_STATE   = findByParamType(Display.BlockDisplay.class, BlockState.class);
+    private static final Method SET_TRANSFORMATION = findByParamType(Display.class,             Transformation.class);
 
     private int  age         = 0;
     private UUID displayUUID = null;
@@ -149,7 +169,9 @@ public class BlackHoleEntity extends Entity {
             Display.BlockDisplay bd = new Display.BlockDisplay(EntityType.BLOCK_DISPLAY, level);
             bd.setPos(center.x, center.y, center.z);
             bd.setNoGravity(true);
-            bd.setBlockState(Blocks.COAL_BLOCK.defaultBlockState());
+            if (SET_BLOCK_STATE != null) {
+                try { SET_BLOCK_STATE.invoke(bd, Blocks.COAL_BLOCK.defaultBlockState()); } catch (Exception ignored) {}
+            }
             level.addFreshEntity(bd);
             displayUUID = bd.getUUID();
         }
@@ -169,13 +191,16 @@ public class BlackHoleEntity extends Entity {
         float scale = size * 2.0f;
         float half  = scale * 0.5f;
 
-        Transformation transformation = new Transformation(
-                new Vector3f(-half, -half, -half),
-                rot,
-                new Vector3f(scale, scale, scale),
-                new Quaternionf()
-        );
-        bd.setTransformation(transformation);
+        if (SET_TRANSFORMATION != null) {
+            try {
+                SET_TRANSFORMATION.invoke(bd, new Transformation(
+                        new Vector3f(-half, -half, -half),
+                        rot,
+                        new Vector3f(scale, scale, scale),
+                        new Quaternionf()
+                ));
+            } catch (Exception ignored) {}
+        }
     }
 
     // ── Block destruction ────────────────────────────────────────────────────
