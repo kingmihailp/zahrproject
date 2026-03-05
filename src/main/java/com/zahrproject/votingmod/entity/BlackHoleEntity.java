@@ -25,7 +25,6 @@ import net.minecraftforge.network.NetworkHooks;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
-import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Random;
 import java.util.UUID;
@@ -34,8 +33,8 @@ import java.util.UUID;
  * "Черные дыры" event entity.
  *
  * Visual:
- *   • Rotating, growing BlockDisplay (coal block) — block state set via public
- *     API, transformation updated each tick via reflection on setTransformation.
+ *   • Rotating, growing BlockDisplay (coal block) — block state and transformation
+ *     set via direct API calls (setTransformation exposed via AccessTransformer).
  *   • Thin PORTAL accretion disk in the equatorial plane.
  *
  * Mechanics:
@@ -51,35 +50,6 @@ public class BlackHoleEntity extends Entity {
             SynchedEntityData.defineId(BlackHoleEntity.class, EntityDataSerializers.FLOAT);
 
     private static final Random RNG = new Random();
-
-    /**
-     * setTransformation is protected in Display — cache the Method once.
-     * Walking up the class hierarchy finds whichever class declares it.
-     */
-    private static final Method SET_TRANSFORMATION;
-    private static final Method SET_BLOCK_STATE;
-    static {
-        Method foundTransform = null;
-        Method foundBlockState = null;
-        Class<?> cls = Display.BlockDisplay.class;
-        while (cls != null && (foundTransform == null || foundBlockState == null)) {
-            if (foundTransform == null) {
-                try {
-                    foundTransform = cls.getDeclaredMethod("setTransformation", Transformation.class);
-                } catch (NoSuchMethodException ignored) {}
-            }
-            if (foundBlockState == null) {
-                try {
-                    foundBlockState = cls.getDeclaredMethod("setBlockState", BlockState.class);
-                } catch (NoSuchMethodException ignored) {}
-            }
-            cls = cls.getSuperclass();
-        }
-        if (foundTransform  != null) foundTransform.setAccessible(true);
-        if (foundBlockState != null) foundBlockState.setAccessible(true);
-        SET_TRANSFORMATION = foundTransform;
-        SET_BLOCK_STATE    = foundBlockState;
-    }
 
     private int  age         = 0;
     private UUID displayUUID = null;
@@ -173,20 +143,13 @@ public class BlackHoleEntity extends Entity {
 
     // ── BlockDisplay ─────────────────────────────────────────────────────────
 
-    /**
-     * Spawns (once) and updates the BlockDisplay every tick.
-     * Block state is set via the public API; transformation via reflection on
-     * the protected Display#setTransformation method.
-     */
     private void updateBlockDisplay(ServerLevel level, Vec3 center, float size) {
         // Lazy-spawn
         if (displayUUID == null) {
             Display.BlockDisplay bd = new Display.BlockDisplay(EntityType.BLOCK_DISPLAY, level);
             bd.setPos(center.x, center.y, center.z);
             bd.setNoGravity(true);
-            if (SET_BLOCK_STATE != null) {
-                try { SET_BLOCK_STATE.invoke(bd, Blocks.COAL_BLOCK.defaultBlockState()); } catch (Exception ignored) {}
-            }
+            bd.setBlockState(Blocks.COAL_BLOCK.defaultBlockState());
             level.addFreshEntity(bd);
             displayUUID = bd.getUUID();
         }
@@ -206,17 +169,13 @@ public class BlackHoleEntity extends Entity {
         float scale = size * 2.0f;
         float half  = scale * 0.5f;
 
-        if (SET_TRANSFORMATION != null) {
-            try {
-                Transformation transformation = new Transformation(
-                        new Vector3f(-half, -half, -half),
-                        rot,
-                        new Vector3f(scale, scale, scale),
-                        new Quaternionf()
-                );
-                SET_TRANSFORMATION.invoke(bd, transformation);
-            } catch (Exception ignored) {}
-        }
+        Transformation transformation = new Transformation(
+                new Vector3f(-half, -half, -half),
+                rot,
+                new Vector3f(scale, scale, scale),
+                new Quaternionf()
+        );
+        bd.setTransformation(transformation);
     }
 
     // ── Block destruction ────────────────────────────────────────────────────
