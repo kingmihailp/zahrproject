@@ -183,10 +183,10 @@ public class BlackHoleEntity extends Entity {
         // Keep co-located with the black hole
         bd.setPos(center.x, center.y, center.z);
 
-        // Build rotation quaternion
-        float yAngle = (float) Math.toRadians(age * 3.0);
-        float xAngle = (float) Math.toRadians(age * 1.7);
-        Quaternionf rot = new Quaternionf().rotateY(yAngle).rotateX(xAngle);
+        // Spin around a single fixed tilted axis — clean rotation without tumbling
+        Vector3f axis = new Vector3f(0.4f, 1.0f, 0.2f).normalize();
+        float angle = (float) Math.toRadians(age * 3.0);
+        Quaternionf rot = new Quaternionf().rotateAxis(angle, axis);
 
         // Scale cube so its visual diameter matches the event-horizon radius
         float scale = size * 2.0f;
