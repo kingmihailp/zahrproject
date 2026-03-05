@@ -1,10 +1,9 @@
 package com.zahrproject.votingmod.entity;
 
+import com.mojang.math.Transformation;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.FloatTag;
-import net.minecraft.nbt.ListTag;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.syncher.EntityDataAccessor;
@@ -24,6 +23,7 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.network.NetworkHooks;
 import org.joml.Quaternionf;
+import org.joml.Vector3f;
 
 import java.lang.reflect.Method;
 import java.util.List;
@@ -34,12 +34,9 @@ import java.util.UUID;
  * "Черные дыры" event entity.
  *
  * Visual:
- *   • Rotating, growing BlockDisplay (coal block) as the dark body,
- *     configured every tick via readAdditionalSaveData / NBT — the same
- *     path the /data command uses, avoiding any private-access issues.
+ *   • Rotating, growing BlockDisplay (coal block) — block state set via public
+ *     API, transformation updated each tick via reflection on setTransformation.
  *   • Thin PORTAL accretion disk in the equatorial plane.
- *   • SMOKE tendrils pulled from a 3-D sphere toward the center.
- *   • LARGE_SMOKE at the core.
  *
  * Mechanics:
  *   • Grows every tick; all pull force and block destruction scale with size.
@@ -56,28 +53,22 @@ public class BlackHoleEntity extends Entity {
     private static final Random RNG = new Random();
 
     /**
-     * readAdditionalSaveData is protected — cache the Method once and call via
-     * reflection. Walking up the class hierarchy finds whichever class declares it.
+     * setTransformation is protected in Display — cache the Method once.
+     * Walking up the class hierarchy finds whichever class declares it.
      */
-    private static final Method READ_NBT;
+    private static final Method SET_TRANSFORMATION;
     static {
         Method found = null;
         Class<?> cls = Display.BlockDisplay.class;
         while (cls != null && found == null) {
             try {
-                found = cls.getDeclaredMethod("readAdditionalSaveData", CompoundTag.class);
+                found = cls.getDeclaredMethod("setTransformation", Transformation.class);
             } catch (NoSuchMethodException ignored) {
                 cls = cls.getSuperclass();
             }
         }
         if (found != null) found.setAccessible(true);
-        READ_NBT = found;
-    }
-
-    /** Calls readAdditionalSaveData on a Display entity via the cached reflection Method. */
-    private static void applyNbt(Entity entity, CompoundTag tag) {
-        if (READ_NBT == null) return;
-        try { READ_NBT.invoke(entity, tag); } catch (Exception ignored) {}
+        SET_TRANSFORMATION = found;
     }
 
     private int  age         = 0;
@@ -173,8 +164,9 @@ public class BlackHoleEntity extends Entity {
     // ── BlockDisplay ─────────────────────────────────────────────────────────
 
     /**
-     * Spawns (once) and updates the BlockDisplay every tick via NBT —
-     * the same code path the /data command uses, so no private-access issues.
+     * Spawns (once) and updates the BlockDisplay every tick.
+     * Block state is set via the public API; transformation via reflection on
+     * the protected Display#setTransformation method.
      */
     private void updateBlockDisplay(ServerLevel level, Vec3 center, float size) {
         // Lazy-spawn
@@ -182,16 +174,9 @@ public class BlackHoleEntity extends Entity {
             Display.BlockDisplay bd = new Display.BlockDisplay(EntityType.BLOCK_DISPLAY, level);
             bd.setPos(center.x, center.y, center.z);
             bd.setNoGravity(true);
+            bd.setBlockState(Blocks.COAL_BLOCK.defaultBlockState());
             level.addFreshEntity(bd);
             displayUUID = bd.getUUID();
-
-            // Set block state once via NBT
-            CompoundTag initTag = new CompoundTag();
-            CompoundTag blockStateTag = new CompoundTag();
-            blockStateTag.putString("Name", "minecraft:coal_block");
-            initTag.put("block_state", blockStateTag);
-            initTag.putBoolean("NoGravity", true);
-            applyNbt(bd, initTag);
         }
 
         Entity raw = level.getEntity(displayUUID);
@@ -209,27 +194,17 @@ public class BlackHoleEntity extends Entity {
         float scale = size * 2.0f;
         float half  = scale * 0.5f;
 
-        // Build transformation compound (same format as /data command)
-        CompoundTag transformTag = new CompoundTag();
-        transformTag.put("translation",   floatList(-half, -half, -half));
-        transformTag.put("left_rotation", floatList(rot.x(), rot.y(), rot.z(), rot.w()));
-        transformTag.put("scale",         floatList(scale, scale, scale));
-        transformTag.put("right_rotation",floatList(0f, 0f, 0f, 1f));
-
-        CompoundTag updateTag = new CompoundTag();
-        updateTag.put("transformation",    transformTag);
-        updateTag.putInt("interpolation_duration", 2);
-        updateTag.putInt("start_interpolation",    0);
-        updateTag.putBoolean("NoGravity", true);
-
-        applyNbt(bd, updateTag);
-    }
-
-    /** Builds a ListTag of FloatTags from varargs. */
-    private static ListTag floatList(float... values) {
-        ListTag list = new ListTag();
-        for (float v : values) list.add(FloatTag.valueOf(v));
-        return list;
+        if (SET_TRANSFORMATION != null) {
+            try {
+                Transformation transformation = new Transformation(
+                        new Vector3f(-half, -half, -half),
+                        rot,
+                        new Vector3f(scale, scale, scale),
+                        new Quaternionf()
+                );
+                SET_TRANSFORMATION.invoke(bd, transformation);
+            } catch (Exception ignored) {}
+        }
     }
 
     // ── Block destruction ────────────────────────────────────────────────────
@@ -284,28 +259,6 @@ public class BlackHoleEntity extends Entity {
             level.sendParticles(ParticleTypes.PORTAL, px, py, pz, 0,
                     (c.x - px) * 0.07, 0.0, (c.z - pz) * 0.07, 1.0);
         }
-
-        // 3-D SMOKE tendrils — pulled from all directions
-        int tendrilCount = (int) (size * 16);
-        for (int i = 0; i < tendrilCount; i++) {
-            double[] p = spherePoint(c, size * (2.5 + RNG.nextDouble() * 4.5));
-            level.sendParticles(ParticleTypes.SMOKE, p[0], p[1], p[2], 0,
-                    (c.x - p[0]) * 0.05, (c.y - p[1]) * 0.05, (c.z - p[2]) * 0.05, 1.0);
-        }
-
-        // LARGE_SMOKE at core
-        level.sendParticles(ParticleTypes.LARGE_SMOKE,
-                c.x, c.y, c.z, Math.max(1, (int) (size * 3)), 0.0, 0.0, 0.0, 0.02);
-    }
-
-    private static double[] spherePoint(Vec3 c, double r) {
-        double phi   = Math.acos(2 * RNG.nextDouble() - 1);
-        double theta = RNG.nextDouble() * 2 * Math.PI;
-        return new double[]{
-                c.x + r * Math.sin(phi) * Math.cos(theta),
-                c.y + r * Math.cos(phi),
-                c.z + r * Math.sin(phi) * Math.sin(theta)
-        };
     }
 
     // ── Explosion ────────────────────────────────────────────────────────────
