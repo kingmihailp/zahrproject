@@ -192,10 +192,16 @@ public class BlackHoleEntity extends Entity {
         float scale = size * 2.0f;
         float half  = scale * 0.5f;
 
+        // Translate so the block center (not corner) stays at the entity origin.
+        // T = -(rot * (half, half, half)) ensures center is always at (0,0,0).
+        Vector3f t = new Vector3f(half, half, half);
+        rot.transform(t);
+        t.negate();
+
         if (SET_TRANSFORMATION != null) {
             try {
                 SET_TRANSFORMATION.invoke(bd, new Transformation(
-                        new Vector3f(-half, -half, -half),
+                        t,
                         rot,
                         new Vector3f(scale, scale, scale),
                         new Quaternionf()
