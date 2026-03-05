@@ -130,6 +130,7 @@ public class BlackHoleEntity extends Entity {
 
         for (Entity entity : nearby) {
             if (entity == this) continue;
+            if (displayUUID != null && displayUUID.equals(entity.getUUID())) continue;
 
             Vec3 delta = center.subtract(entity.position());
             double dist = Math.max(delta.length(), 0.01);
