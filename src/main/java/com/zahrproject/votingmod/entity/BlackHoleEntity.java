@@ -107,6 +107,10 @@ public class BlackHoleEntity extends Entity {
         if (this.level().isClientSide()) return;
 
         ServerLevel level = (ServerLevel) this.level();
+
+        // Auto-explode after 10 minutes (12 000 ticks)
+        if (age >= 12000) { explode(level); return; }
+
         float size = getHoleSize();
 
         // 1. Grow
