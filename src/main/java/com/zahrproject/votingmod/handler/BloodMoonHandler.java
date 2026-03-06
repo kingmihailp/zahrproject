@@ -19,15 +19,14 @@ import java.util.concurrent.TimeUnit;
  * Manages the "Истинный хардкор" event:
  *
  *   • All players' max health is reduced to 1.0 HP (half a heart).
- *   • After 5 minutes everything reverts automatically.
+ *   • After 5 minutes everything reverts to the default 20.0 HP (10 hearts).
  */
 public class BloodMoonHandler {
 
     public static final String TIMER_NAME = "Истинный хардкор";
 
-    private static final String NBT_EXPIRY_KEY      = "votingmod_true_hardcore_expiry";
-    private static final String NBT_DURATION_KEY    = "votingmod_true_hardcore_duration";
-    private static final String NBT_ORIG_HEALTH_KEY = "votingmod_true_hardcore_orig_health";
+    private static final String NBT_EXPIRY_KEY   = "votingmod_true_hardcore_expiry";
+    private static final String NBT_DURATION_KEY = "votingmod_true_hardcore_duration";
 
     private static final ScheduledExecutorService SCHEDULER =
             Executors.newSingleThreadScheduledExecutor(r -> {
@@ -51,8 +50,6 @@ public class BloodMoonHandler {
 
         for (ServerPlayer p : server.getPlayerList().getPlayers()) {
             CompoundTag tag = p.getPersistentData();
-            double origHealth = p.getAttribute(Attributes.MAX_HEALTH).getBaseValue();
-            tag.putDouble(NBT_ORIG_HEALTH_KEY, origHealth);
             tag.putLong(NBT_EXPIRY_KEY,   expiryMs);
             tag.putLong(NBT_DURATION_KEY, durationMs);
             applyHealthReduction(p);
@@ -85,10 +82,10 @@ public class BloodMoonHandler {
         long remaining     = savedExpiry - System.currentTimeMillis();
 
         if (remaining <= 0) {
-            restorePlayerHealth(player, tag);
+            // Expired while offline — restore health and clear keys
+            restorePlayerHealth(player);
             tag.remove(NBT_EXPIRY_KEY);
             tag.remove(NBT_DURATION_KEY);
-            tag.remove(NBT_ORIG_HEALTH_KEY);
             expiryMs = 0;
             ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
                     new EventTimerPacket(TIMER_NAME, 0, 0));
@@ -125,7 +122,6 @@ public class BloodMoonHandler {
         } else {
             tag.remove(NBT_EXPIRY_KEY);
             tag.remove(NBT_DURATION_KEY);
-            tag.remove(NBT_ORIG_HEALTH_KEY);
         }
     }
 
@@ -141,28 +137,31 @@ public class BloodMoonHandler {
         }
     }
 
-    /** Restore max health to the value saved in the player's NBT. */
-    private static void restorePlayerHealth(ServerPlayer player, CompoundTag tag) {
-        if (!tag.contains(NBT_ORIG_HEALTH_KEY)) return;
-        double origHealth = tag.getDouble(NBT_ORIG_HEALTH_KEY);
+    /** Restore max health to the Minecraft default (20 HP = 10 hearts). */
+    private static void restorePlayerHealth(ServerPlayer player) {
         var attr = player.getAttribute(Attributes.MAX_HEALTH);
         if (attr != null) {
-            attr.setBaseValue(origHealth);
+            attr.setBaseValue(20.0);
         }
     }
 
     private static void scheduleRevert(long delayMs) {
         SCHEDULER.schedule(() -> {
-            expiryMs = 0;
+            // Set expiryMs = 0 INSIDE the server-thread task so that
+            // onPlayerLogout cannot race between "expiryMs=0" and the restore
+            // loop and accidentally clear the NBT keys before we restore health.
             MinecraftServer srv = ServerLifecycleHooks.getCurrentServer();
-            if (srv == null) return;
+            if (srv == null) {
+                expiryMs = 0;
+                return;
+            }
             srv.execute(() -> {
+                expiryMs = 0; // now safe: we're on the main thread, logout is also main-thread
                 for (ServerPlayer p : srv.getPlayerList().getPlayers()) {
+                    restorePlayerHealth(p);
                     CompoundTag tag = p.getPersistentData();
-                    restorePlayerHealth(p, tag);
                     tag.remove(NBT_EXPIRY_KEY);
                     tag.remove(NBT_DURATION_KEY);
-                    tag.remove(NBT_ORIG_HEALTH_KEY);
                     ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p),
                             new EventTimerPacket(TIMER_NAME, 0, 0));
                 }
