@@ -1150,7 +1150,7 @@ public class VotingEventList {
                 "Кремень и сталь",
                 server -> {
                     for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-                        player.setSecondsOnFire(10);
+                        player.setRemainingFireTicks(200); // 10 секунд, игнорирует защиту от огня
                     }
                     broadcast(server, "Кремень и сталь! Все игроки подожжены!");
                 }

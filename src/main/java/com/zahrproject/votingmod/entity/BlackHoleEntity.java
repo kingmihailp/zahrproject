@@ -125,12 +125,12 @@ public class BlackHoleEntity extends Entity {
         double killRadius   = 1.5;
         double damageRadius = size * 2.0;
 
-        List<Entity> nearby = level.getEntities(this,
-                new AABB(center, center).inflate(pullRadius));
+        final UUID myDisplay = displayUUID;
+        List<Entity> nearby = level.getEntitiesOfClass(Entity.class,
+                new AABB(center, center).inflate(pullRadius),
+                e -> e != this && (myDisplay == null || !myDisplay.equals(e.getUUID())));
 
         for (Entity entity : nearby) {
-            if (entity == this) continue;
-            if (displayUUID != null && displayUUID.equals(entity.getUUID())) continue;
 
             Vec3 delta = center.subtract(entity.position());
             double dist = Math.max(delta.length(), 0.01);
