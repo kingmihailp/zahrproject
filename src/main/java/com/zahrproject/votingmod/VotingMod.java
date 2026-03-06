@@ -8,6 +8,7 @@ import com.zahrproject.votingmod.client.GoldenOverlayLayer;
 import com.zahrproject.votingmod.client.InventoryLockClientHandler;
 import com.zahrproject.votingmod.client.InvertColorsHandler;
 import com.zahrproject.votingmod.client.RandomTextureHandler;
+import com.zahrproject.votingmod.client.VoteResultOverlay;
 import com.zahrproject.votingmod.client.PlayerFlipRenderHandler;
 import com.zahrproject.votingmod.client.ScreenFlipHandler;
 import com.zahrproject.votingmod.client.SkateboardRenderHandler;
@@ -96,6 +97,7 @@ public class VotingMod {
             MinecraftForge.EVENT_BUS.register(InventoryLockClientHandler.class);
             MinecraftForge.EVENT_BUS.register(InvertColorsHandler.class);
             MinecraftForge.EVENT_BUS.register(RandomTextureHandler.class);
+            MinecraftForge.EVENT_BUS.register(VoteResultOverlay.class);
         });
         FMLJavaModLoadingContext.get().getModEventBus().addListener(GoldenOverlayLayer::onAddLayers);
         LOGGER.info("[VotingMod] Client setup complete.");

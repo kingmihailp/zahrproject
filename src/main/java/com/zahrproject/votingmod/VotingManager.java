@@ -198,7 +198,11 @@ public class VotingManager {
                 countA, countB, winner.getDescription());
 
         // Send result packet to all players
-        VoteResultPacket resultPacket = new VoteResultPacket(aWins ? 0 : 1, countA, countB);
+        VoteResultPacket resultPacket = new VoteResultPacket(
+                aWins ? 0 : 1, countA, countB,
+                currentEventA.getDescription(),
+                currentEventB.getDescription()
+        );
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), resultPacket);
         }

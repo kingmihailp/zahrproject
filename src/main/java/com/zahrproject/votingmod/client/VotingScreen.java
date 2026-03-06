@@ -8,7 +8,8 @@ import net.minecraft.network.chat.Component;
 
 /**
  * Voting screen: two randomly-picked events side by side.
- * The player votes for A or B; the event with more votes happens.
+ * The player votes for A or B; the screen closes IMMEDIATELY after voting
+ * so the player can keep moving. Results are shown by {@link VoteResultOverlay}.
  *
  *  ┌──────────────────────────────────────────────────────────┐
  *  │  ★  ГОЛОСОВАНИЕ  ★          Осталось: 28 сек.           │
@@ -30,17 +31,8 @@ public class VotingScreen extends Screen {
     private long openTimeMs;
     private long remainingMs;
 
-    // Vote state — -1=not voted, 0=A, 1=B
-    private int  myVote    = -1;
+    // Prevent double-vote
     private boolean hasVoted = false;
-
-    // Result state
-    private boolean showingResult  = false;
-    private int     resultWinner   = -1; // 0=A won, 1=B won
-    private int     resultVotesA   = 0;
-    private int     resultVotesB   = 0;
-    private long    resultShowStartMs = 0;
-    private static final long RESULT_DISPLAY_MS = 2000;
 
     // Buttons
     private MultilineButton btnA;
@@ -102,12 +94,10 @@ public class VotingScreen extends Screen {
     }
 
     private void castVote(int choice) {
-        if (hasVoted || showingResult) return;
+        if (hasVoted) return;
         hasVoted = true;
-        myVote   = choice;
-        btnA.active = false;
-        btnB.active = false;
         ModNetwork.CHANNEL.sendToServer(new VotePacket(choice));
+        this.onClose(); // screen closes immediately — player can move again
     }
 
     // ── Tick ──────────────────────────────────────────────────────────────────
@@ -116,12 +106,7 @@ public class VotingScreen extends Screen {
     public void tick() {
         long now    = System.currentTimeMillis();
         remainingMs = Math.max(0, durationSeconds * 1000L - (now - openTimeMs));
-
-        if (showingResult) {
-            if (now - resultShowStartMs >= RESULT_DISPLAY_MS) onClose();
-        } else if (remainingMs <= 0 && !hasVoted) {
-            onClose();
-        }
+        if (remainingMs <= 0) onClose();
     }
 
     // ── Render ────────────────────────────────────────────────────────────────
@@ -130,8 +115,7 @@ public class VotingScreen extends Screen {
     public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
         renderBackground(g);
         drawPanel(g);
-        if (showingResult) drawResultContent(g);
-        else               drawVoteHeader(g);
+        drawVoteHeader(g);
         super.render(g, mouseX, mouseY, partialTick); // draws buttons
     }
 
@@ -165,71 +149,6 @@ public class VotingScreen extends Screen {
         int bCenterX = btnBX + btnW / 2;
         g.drawCenteredString(font, "§eВариант A", aCenterX, labelY, COLOR_WHITE);
         g.drawCenteredString(font, "§eВариант B", bCenterX, labelY, COLOR_WHITE);
-
-        // Voted confirmation
-        if (hasVoted) {
-            String msg = "§aВы проголосовали за вариант " + (myVote == 0 ? "A" : "B") + "!";
-            g.drawCenteredString(font, msg, cx, panelY + 58, COLOR_WHITE);
-            g.drawCenteredString(font, "Ожидание результатов...", cx, panelY + 70, COLOR_GRAY);
-        }
-    }
-
-    private void drawResultContent(GuiGraphics g) {
-        int cx = this.width / 2;
-
-        // Winner header
-        String winner = resultWinner == 0 ? "A" : "B";
-        g.drawCenteredString(font, "§6★  Победил вариант " + winner + "!  ★",
-                cx, panelY + 9, COLOR_GOLD);
-
-        // Thin separator
-        g.fill(panelX + 10, panelY + 22, panelX + panelW - 10, panelY + 23, 0x88FFD700);
-
-        // Winning event description (centered)
-        String winDesc = resultWinner == 0 ? optionA : optionB;
-        g.drawCenteredString(font, "§e" + winDesc, cx, panelY + 30, 0xFFFFFF00);
-
-        // Vote progress bar
-        int total = resultVotesA + resultVotesB;
-        if (total > 0) {
-            int barW  = panelW - 40;
-            int barH  = 12;
-            int barX  = panelX + 20;
-            int barY  = btnY - 28;
-            int aFill = (int)((float) resultVotesA / total * barW);
-
-            g.fill(barX, barY, barX + barW, barY + barH, 0xFF333333);
-            if (aFill > 0)     g.fill(barX,         barY, barX + aFill, barY + barH, 0xFF2288DD); // A = blue
-            if (aFill < barW)  g.fill(barX + aFill, barY, barX + barW,  barY + barH, 0xFFDD8800); // B = amber
-            g.fill(barX, barY,            barX + barW, barY + 1,          COLOR_WHITE);
-            g.fill(barX, barY + barH - 1, barX + barW, barY + barH,       COLOR_WHITE);
-
-            // Labels
-            String aLabel = (resultWinner == 0 ? "§b" : "§7") + "A: " + resultVotesA + " гол.";
-            String bLabel = (resultWinner == 1 ? "§6" : "§7") + "B: " + resultVotesB + " гол.";
-            int bLabelW   = font.width(bLabel);
-            g.drawString(font, aLabel, barX + 2,                 barY - 11, COLOR_WHITE, false);
-            g.drawString(font, bLabel, barX + barW - bLabelW - 2, barY - 11, COLOR_WHITE, false);
-        }
-
-        // Countdown
-        long closeIn = Math.max(0, RESULT_DISPLAY_MS - (System.currentTimeMillis() - resultShowStartMs));
-        g.drawCenteredString(font,
-                "§7Закрытие через " + (closeIn / 1000 + 1) + " сек...",
-                cx, panelY + panelH - 18, COLOR_GRAY);
-    }
-
-    // ── Public API ────────────────────────────────────────────────────────────
-
-    /** Called by VoteResultPacket handler. */
-    public void showResult(int winner, int votesA, int votesB) {
-        this.showingResult    = true;
-        this.resultWinner     = winner;
-        this.resultVotesA     = votesA;
-        this.resultVotesB     = votesB;
-        this.resultShowStartMs = System.currentTimeMillis();
-        if (btnA != null) btnA.active = false;
-        if (btnB != null) btnB.active = false;
     }
 
     @Override public boolean isPauseScreen()    { return false; }
