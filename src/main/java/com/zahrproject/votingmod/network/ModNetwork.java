@@ -77,5 +77,12 @@ public class ModNetwork {
                 FlipModelPacket::encode,
                 FlipModelPacket::decode,
                 FlipModelPacket::handle);
+
+        // S2C: Server tells each client to invert (or restore) their screen colours
+        CHANNEL.registerMessage(id++,
+                InvertColorsPacket.class,
+                InvertColorsPacket::encode,
+                InvertColorsPacket::decode,
+                InvertColorsPacket::handle);
     }
 }

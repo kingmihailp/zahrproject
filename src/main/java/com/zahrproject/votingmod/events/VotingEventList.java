@@ -3,6 +3,8 @@ package com.zahrproject.votingmod.events;
 import com.zahrproject.votingmod.VotingManager;
 import com.zahrproject.votingmod.handler.FlipModelTracker;
 import com.zahrproject.votingmod.handler.FlipScreenTracker;
+import com.zahrproject.votingmod.handler.InvertColorsTracker;
+import com.zahrproject.votingmod.network.InvertColorsPacket;
 import com.zahrproject.votingmod.handler.GoldenPlayerHandler;
 import com.zahrproject.votingmod.handler.HardcoreModeHandler;
 import com.zahrproject.votingmod.handler.HostileVillagersHandler;
@@ -81,6 +83,13 @@ public class VotingEventList {
     private static final ScheduledExecutorService FLIP_SCHEDULER =
             Executors.newSingleThreadScheduledExecutor(r -> {
                 Thread t = new Thread(r, "VotingMod-FlipRevert");
+                t.setDaemon(true);
+                return t;
+            });
+
+    private static final ScheduledExecutorService INVERT_SCHEDULER =
+            Executors.newSingleThreadScheduledExecutor(r -> {
+                Thread t = new Thread(r, "VotingMod-InvertRevert");
                 t.setDaemon(true);
                 return t;
             });
@@ -979,6 +988,37 @@ public class VotingEventList {
                                 ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), timerEnd);
                             }
                             broadcast(srv, "Всё на своих местах! Экраны игроков восстановлены.");
+                        });
+                    }, durationMs, TimeUnit.MILLISECONDS);
+                }
+        ));
+
+        // ── Special: Enderman's Gaze — colour inversion for 5 minutes ────────
+
+        events.add(new VotingEvent(
+                "Взгляд эндермэна",
+                server -> {
+                    long durationMs = 5 * 60 * 1000L;
+                    InvertColorsTracker.setActive(System.currentTimeMillis() + durationMs, durationMs);
+                    InvertColorsPacket pktOn    = new InvertColorsPacket(true);
+                    EventTimerPacket   timerOn  = new EventTimerPacket("Взгляд эндермэна", durationMs, durationMs);
+                    for (ServerPlayer p : server.getPlayerList().getPlayers()) {
+                        ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), pktOn);
+                        ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), timerOn);
+                    }
+                    broadcast(server, "Взгляд эндермэна! Цвета экранов инвертированы на 5 минут!");
+                    INVERT_SCHEDULER.schedule(() -> {
+                        InvertColorsTracker.clear();
+                        MinecraftServer srv = ServerLifecycleHooks.getCurrentServer();
+                        if (srv == null) return;
+                        srv.execute(() -> {
+                            InvertColorsPacket pktOff   = new InvertColorsPacket(false);
+                            EventTimerPacket   timerOff = new EventTimerPacket("Взгляд эндермэна", 0, 0);
+                            for (ServerPlayer p : srv.getPlayerList().getPlayers()) {
+                                ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), pktOff);
+                                ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), timerOff);
+                            }
+                            broadcast(srv, "Взгляд эндермэна спал. Цвета восстановлены.");
                         });
                     }, durationMs, TimeUnit.MILLISECONDS);
                 }
