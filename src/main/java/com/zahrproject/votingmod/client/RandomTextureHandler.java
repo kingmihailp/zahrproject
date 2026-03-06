@@ -1,7 +1,9 @@
 package com.zahrproject.votingmod.client;
 
+import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.texture.SpriteContents;
 import net.minecraft.client.renderer.texture.TextureAtlas;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.resources.ResourceLocation;
@@ -20,15 +22,21 @@ import java.util.*;
  * Client-side handler for the "Это точно не вирус?" voting event.
  *
  * On activation:
- *   1. Downloads the block/item atlas texture from the GPU (mip level 0).
- *   2. Saves each sprite's original pixel region.
- *   3. Shuffles pixel regions among sprites of equal size and re-uploads.
+ *   1. Reads each sprite's original pixel data from {@link SpriteContents#originalImage}
+ *      (the NativeImage kept in RAM by Minecraft), NOT from the GPU.
+ *   2. Saves the data alongside the sprite's atlas position.
+ *   3. Shuffles pixel regions among sprites of equal size and uploads via glTexSubImage2D.
  *
- * On deactivation / disconnect: restores original pixel data.
+ * Why NativeImage instead of glGetTexImage:
+ *   glGetTexImage downloads whatever is currently on the GPU.  If the deferred
+ *   atlas-restore from a previous disconnect races with a new activation (both
+ *   land in the same Minecraft.execute() queue), glGetTexImage may capture the
+ *   SHUFFLED atlas and save it as "original".  Each rejoin then accumulates more
+ *   corruption, producing the characteristic black-with-coloured-lines artefact.
+ *   NativeImage.originalImage always holds the true source pixels regardless of
+ *   GPU state, making every activation start from a clean baseline.
  *
- * Sprites are grouped by their pixel dimensions before shuffling so that
- * each upload region always receives exactly the right number of bytes.
- * Most block/item sprites are 16 × 16, so nearly all of them get shuffled.
+ * On deactivation / disconnect: restores original pixel data via glTexSubImage2D.
  */
 @OnlyIn(Dist.CLIENT)
 public class RandomTextureHandler {
@@ -40,14 +48,13 @@ public class RandomTextureHandler {
     private static int atlasW    = 0;
     private static int atlasH    = 0;
 
-    /** Pixel bounds of each collected sprite in the atlas: [x, y, w, h]. */
-    private static final List<int[]>  spriteRegions    = new ArrayList<>();
-    /** Original RGBA byte data for each sprite (parallel to spriteRegions). */
-    private static final List<byte[]> originalSprites  = new ArrayList<>();
+    /** Atlas position of each collected sprite: [x, y, w, h]. */
+    private static final List<int[]>  spriteRegions   = new ArrayList<>();
+    /** Original RGBA bytes per sprite, read from NativeImage (parallel to spriteRegions). */
+    private static final List<byte[]> originalSprites = new ArrayList<>();
 
     // ── Packet handler entry point ────────────────────────────────────────────
 
-    /** Called on the client/render thread by {@link com.zahrproject.votingmod.network.RandomTexturePacket}. */
     public static void setActive(boolean value) {
         if (value) {
             if (!initialized) tryInitialize();
@@ -55,8 +62,6 @@ public class RandomTextureHandler {
         } else {
             if (initialized && active) {
                 restore();
-                // Reset so the next activation picks up a fresh atlas
-                // (handles resource-pack changes between events)
                 initialized = false;
                 spriteRegions.clear();
                 originalSprites.clear();
@@ -65,17 +70,16 @@ public class RandomTextureHandler {
         active = value;
     }
 
-    // ── Disconnect: never leave the atlas in a shuffled state ─────────────────
+    // ── Disconnect ────────────────────────────────────────────────────────────
 
     @SubscribeEvent
     public static void onDisconnect(ClientPlayerNetworkEvent.LoggingOut event) {
         boolean wasActive = active;
         active = false;
         if (wasActive && initialized) {
-            // LoggingOut can fire from the integrated-server thread (not the render
-            // thread). Capture everything we need NOW, clear the shared state, then
-            // schedule the actual GL upload via Minecraft.execute() which is a
-            // thread-safe queue processed on the main/render thread each tick.
+            // LoggingOut can fire from the integrated-server thread.
+            // Capture everything before clearing, then schedule the GL restore
+            // via Minecraft.execute() — a thread-safe queue on the render/main thread.
             final int          capturedId      = atlasGlId;
             final List<int[]>  capturedRegions = new ArrayList<>(spriteRegions);
             final List<byte[]> capturedPixels  = new ArrayList<>(originalSprites);
@@ -85,7 +89,6 @@ public class RandomTextureHandler {
 
             Minecraft.getInstance().execute(() -> {
                 try {
-                    // Allocate one reusable buffer sized for the largest sprite
                     int maxLen = 0;
                     for (byte[] p : capturedPixels) maxLen = Math.max(maxLen, p.length);
                     if (maxLen == 0) return;
@@ -100,10 +103,7 @@ public class RandomTextureHandler {
                                 r[0], r[1], r[2], r[3],
                                 GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, buf);
                     }
-                } catch (Exception ignored) {
-                    // If the atlas was already replaced (e.g. resource reload),
-                    // the damage is cosmetic and will be fixed on next pack reload.
-                }
+                } catch (Exception ignored) {}
             });
         } else {
             initialized = false;
@@ -112,7 +112,7 @@ public class RandomTextureHandler {
         }
     }
 
-    // ── Initialization: download the atlas from GPU once per activation ───────
+    // ── Initialization: read sprite pixels from NativeImage (RAM) ─────────────
 
     private static void tryInitialize() {
         try {
@@ -123,30 +123,24 @@ public class RandomTextureHandler {
             Map<ResourceLocation, TextureAtlasSprite> spriteMap = findSpriteMap(atlas);
             if (spriteMap.isEmpty()) return;
 
+            // Atlas dimensions are needed for UV → pixel conversion.
+            // glGetTexLevelParameteri is a tiny, harmless GL query (no data download).
             RenderSystem.bindTexture(atlasGlId);
             atlasW = GL11.glGetTexLevelParameteri(GL11.GL_TEXTURE_2D, 0, GL11.GL_TEXTURE_WIDTH);
             atlasH = GL11.glGetTexLevelParameteri(GL11.GL_TEXTURE_2D, 0, GL11.GL_TEXTURE_HEIGHT);
-            // Guard against unexpectedly large atlases to avoid huge allocations
             if (atlasW <= 0 || atlasH <= 0 || atlasW > 8192 || atlasH > 8192) return;
 
-            // Download the entire atlas at mip level 0 (RGBA, unsigned byte)
-            ByteBuffer atlasBuf = ByteBuffer.allocateDirect(atlasW * atlasH * 4);
-            GL11.glGetTexImage(GL11.GL_TEXTURE_2D, 0, GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, atlasBuf);
-            atlasBuf.rewind();
-
             for (TextureAtlasSprite spr : spriteMap.values()) {
-                // Derive pixel-exact bounds from the UV floats
                 int x = Math.round(spr.getU0() * atlasW);
                 int y = Math.round(spr.getV0() * atlasH);
                 int w = Math.max(1, Math.round((spr.getU1() - spr.getU0()) * atlasW));
                 int h = Math.max(1, Math.round((spr.getV1() - spr.getV0()) * atlasH));
                 if (x < 0 || y < 0 || x + w > atlasW || y + h > atlasH) continue;
 
-                byte[] pixels = new byte[w * h * 4];
-                for (int row = 0; row < h; row++) {
-                    atlasBuf.position(((y + row) * atlasW + x) * 4);
-                    atlasBuf.get(pixels, row * w * 4, w * 4);
-                }
+                // Read from NativeImage in RAM — always original, never shuffled.
+                byte[] pixels = readFromNativeImage(spr, w, h);
+                if (pixels == null) continue;
+
                 spriteRegions.add(new int[]{x, y, w, h});
                 originalSprites.add(pixels);
             }
@@ -158,21 +152,60 @@ public class RandomTextureHandler {
         }
     }
 
-    // ── Apply: shuffle pixels within size groups ──────────────────────────────
+    /**
+     * Reads a sprite's pixels from its {@link SpriteContents}.originalImage (NativeImage).
+     * Returns RGBA bytes suitable for {@code glTexSubImage2D(GL_RGBA, GL_UNSIGNED_BYTE)}.
+     * Returns {@code null} if the image is unavailable or the format is unsupported.
+     */
+    private static byte[] readFromNativeImage(TextureAtlasSprite sprite, int w, int h) {
+        try {
+            // SpriteContents is accessible via the public contents() method in 1.20.1,
+            // but we use type-based reflection to stay obfuscation-safe.
+            SpriteContents contents = findFieldOfType(sprite, SpriteContents.class);
+            if (contents == null) return null;
+
+            NativeImage image = findFieldOfType(contents, NativeImage.class);
+            if (image == null) return null;
+
+            int imgW = image.getWidth();
+            int imgH = image.getHeight();
+            // For animated sprites, originalImage height = frameHeight × frameCount.
+            // We only need the first frame (rows 0..h-1), which is what the atlas shows.
+            int useW = Math.min(w, imgW);
+            int useH = Math.min(h, imgH);
+
+            byte[] pixels = new byte[w * h * 4]; // zero-initialised (transparent black for gaps)
+            for (int py = 0; py < useH; py++) {
+                for (int px = 0; px < useW; px++) {
+                    // getPixelRGBA returns R in the lowest byte on x86 (little-endian memGetInt).
+                    // Decomposing into bytes matches GL_RGBA / GL_UNSIGNED_BYTE memory order.
+                    int rgba = image.getPixelRGBA(px, py);
+                    int off  = (py * w + px) * 4;
+                    pixels[off]     = (byte) rgba;
+                    pixels[off + 1] = (byte)(rgba >> 8);
+                    pixels[off + 2] = (byte)(rgba >> 16);
+                    pixels[off + 3] = (byte)(rgba >> 24);
+                }
+            }
+            return pixels;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    // ── Apply: shuffle pixels within same-size groups ─────────────────────────
 
     private static void applyRandomization() {
         int n = spriteRegions.size();
         if (n == 0) return;
 
-        // Group sprite indices by pixel dimensions (w << 16 | h as key)
         Map<Long, List<Integer>> bySize = new HashMap<>();
         for (int i = 0; i < n; i++) {
-            int[] r   = spriteRegions.get(i);
-            long key  = ((long) r[2] << 32) | (r[3] & 0xFFFFFFFFL);
+            int[] r  = spriteRegions.get(i);
+            long key = ((long) r[2] << 32) | (r[3] & 0xFFFFFFFFL);
             bySize.computeIfAbsent(key, k -> new ArrayList<>()).add(i);
         }
 
-        // Build shuffled assignment: shuffled[i] = which original sprite's pixels to put at position i
         byte[][] shuffled = originalSprites.toArray(new byte[0][]);
         Random rng = new Random();
         for (List<Integer> group : bySize.values()) {
@@ -186,21 +219,19 @@ public class RandomTextureHandler {
         uploadSprites(shuffled);
     }
 
-    // ── Restore: put original pixels back ────────────────────────────────────
+    // ── Restore ───────────────────────────────────────────────────────────────
 
     private static void restore() {
         uploadSprites(originalSprites.toArray(new byte[0][]));
     }
 
-    // ── GL helpers ────────────────────────────────────────────────────────────
+    // ── GL upload ─────────────────────────────────────────────────────────────
 
     private static void uploadSprites(byte[][] pixels) {
         int maxLen = 0;
         for (byte[] p : pixels) maxLen = Math.max(maxLen, p.length);
         if (maxLen == 0) return;
 
-        // Single reusable buffer — avoids hundreds of allocateDirect() calls
-        // which can exhaust native (off-heap) memory on large atlases.
         ByteBuffer buf = ByteBuffer.allocateDirect(maxLen);
         RenderSystem.bindTexture(atlasGlId);
         for (int i = 0; i < spriteRegions.size(); i++) {
@@ -213,11 +244,8 @@ public class RandomTextureHandler {
         }
     }
 
-    /**
-     * Finds the {@code Map<ResourceLocation, TextureAtlasSprite>} field inside
-     * {@link TextureAtlas} by inspecting field types rather than relying on a
-     * specific obfuscated name.
-     */
+    // ── Reflection helpers (obfuscation-safe — find by type, not name) ────────
+
     @SuppressWarnings("unchecked")
     private static Map<ResourceLocation, TextureAtlasSprite> findSpriteMap(TextureAtlas atlas) {
         for (Field f : TextureAtlas.class.getDeclaredFields()) {
@@ -232,5 +260,21 @@ public class RandomTextureHandler {
             } catch (Exception ignored) {}
         }
         return Map.of();
+    }
+
+    /** Finds the first declared field (walking the class hierarchy) whose type is assignable to {@code type}. */
+    @SuppressWarnings("unchecked")
+    private static <T> T findFieldOfType(Object obj, Class<T> type) {
+        for (Class<?> cls = obj.getClass(); cls != null; cls = cls.getSuperclass()) {
+            for (Field f : cls.getDeclaredFields()) {
+                if (!type.isAssignableFrom(f.getType())) continue;
+                f.setAccessible(true);
+                try {
+                    Object val = f.get(obj);
+                    if (type.isInstance(val)) return type.cast(val);
+                } catch (Exception ignored) {}
+            }
+        }
+        return null;
     }
 }

@@ -5,6 +5,7 @@ import com.zahrproject.votingmod.handler.FlipModelTracker;
 import com.zahrproject.votingmod.handler.FlipScreenTracker;
 import com.zahrproject.votingmod.handler.InvertColorsTracker;
 import com.zahrproject.votingmod.handler.RandomTextureTracker;
+import com.zahrproject.votingmod.handler.BloodMoonHandler;
 import com.zahrproject.votingmod.network.InvertColorsPacket;
 import com.zahrproject.votingmod.network.RandomTexturePacket;
 import com.zahrproject.votingmod.handler.GoldenPlayerHandler;
@@ -109,6 +110,7 @@ public class VotingEventList {
                 t.setDaemon(true);
                 return t;
             });
+
 
     /** Loot tables used by the random chest event. */
     private static final ResourceLocation[] CHEST_LOOT_TABLES = {
@@ -1272,6 +1274,17 @@ public class VotingEventList {
                         }
                     }
                     broadcast(server, "Башня из мобов! Рядом с каждым игроком появилась стопка из случайных мобов!");
+                }
+        ));
+
+        // ── Special: blood moon — hard difficulty, 8x spawn rate, 2 heart cap ──
+
+        events.add(new VotingEvent(
+                "Истинная кровавая луна",
+                server -> {
+                    long duration = 8 * 60 * 1000L;
+                    BloodMoonHandler.activate(server, duration);
+                    broadcast(server, "Истинная кровавая луна! Сложность HARD, 8x спаунрейт, 2 сердца на 8 минут!");
                 }
         ));
 

@@ -21,6 +21,7 @@ import com.zahrproject.votingmod.handler.FlipModelTracker;
 import com.zahrproject.votingmod.handler.FlipScreenTracker;
 import com.zahrproject.votingmod.handler.InvertColorsTracker;
 import com.zahrproject.votingmod.handler.RandomTextureTracker;
+import com.zahrproject.votingmod.handler.BloodMoonHandler;
 import com.zahrproject.votingmod.handler.ForgeEventHandler;
 import com.zahrproject.votingmod.handler.GoldenPlayerHandler;
 import com.zahrproject.votingmod.handler.HardcoreModeHandler;
@@ -76,6 +77,7 @@ public class VotingMod {
         MinecraftForge.EVENT_BUS.register(new FlipModelTracker());
         MinecraftForge.EVENT_BUS.register(new InvertColorsTracker());
         MinecraftForge.EVENT_BUS.register(new RandomTextureTracker());
+        MinecraftForge.EVENT_BUS.register(BloodMoonHandler.class);
         LOGGER.info("[VotingMod] Mod initialized!");
     }
 
