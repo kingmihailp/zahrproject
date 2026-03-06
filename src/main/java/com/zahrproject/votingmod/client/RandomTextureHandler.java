@@ -72,18 +72,39 @@ public class RandomTextureHandler {
         boolean wasActive = active;
         active = false;
         if (wasActive && initialized) {
-            // LoggingOut can fire on the Netty thread; GL calls require the render thread.
-            // recordRenderCall() queues the work to run on the very next render frame,
-            // before the atlas could be invalidated, so the restore is always safe.
-            Runnable doRestore = () -> {
-                try { restore(); } finally {
-                    initialized = false;
-                    spriteRegions.clear();
-                    originalSprites.clear();
+            // LoggingOut can fire from the integrated-server thread (not the render
+            // thread). Capture everything we need NOW, clear the shared state, then
+            // schedule the actual GL upload via Minecraft.execute() which is a
+            // thread-safe queue processed on the main/render thread each tick.
+            final int          capturedId      = atlasGlId;
+            final List<int[]>  capturedRegions = new ArrayList<>(spriteRegions);
+            final List<byte[]> capturedPixels  = new ArrayList<>(originalSprites);
+            initialized = false;
+            spriteRegions.clear();
+            originalSprites.clear();
+
+            Minecraft.getInstance().execute(() -> {
+                try {
+                    // Allocate one reusable buffer sized for the largest sprite
+                    int maxLen = 0;
+                    for (byte[] p : capturedPixels) maxLen = Math.max(maxLen, p.length);
+                    if (maxLen == 0) return;
+
+                    ByteBuffer buf = ByteBuffer.allocateDirect(maxLen);
+                    RenderSystem.bindTexture(capturedId);
+                    for (int i = 0; i < capturedRegions.size(); i++) {
+                        int[] r = capturedRegions.get(i);
+                        buf.clear();
+                        buf.put(capturedPixels.get(i)).flip();
+                        GL11.glTexSubImage2D(GL11.GL_TEXTURE_2D, 0,
+                                r[0], r[1], r[2], r[3],
+                                GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, buf);
+                    }
+                } catch (Exception ignored) {
+                    // If the atlas was already replaced (e.g. resource reload),
+                    // the damage is cosmetic and will be fixed on next pack reload.
                 }
-            };
-            if (RenderSystem.isOnRenderThread()) doRestore.run();
-            else RenderSystem.recordRenderCall(doRestore::run);
+            });
         } else {
             initialized = false;
             spriteRegions.clear();
@@ -174,10 +195,17 @@ public class RandomTextureHandler {
     // ── GL helpers ────────────────────────────────────────────────────────────
 
     private static void uploadSprites(byte[][] pixels) {
+        int maxLen = 0;
+        for (byte[] p : pixels) maxLen = Math.max(maxLen, p.length);
+        if (maxLen == 0) return;
+
+        // Single reusable buffer — avoids hundreds of allocateDirect() calls
+        // which can exhaust native (off-heap) memory on large atlases.
+        ByteBuffer buf = ByteBuffer.allocateDirect(maxLen);
         RenderSystem.bindTexture(atlasGlId);
         for (int i = 0; i < spriteRegions.size(); i++) {
-            int[]      r   = spriteRegions.get(i);
-            ByteBuffer buf = ByteBuffer.allocateDirect(pixels[i].length);
+            int[] r = spriteRegions.get(i);
+            buf.clear();
             buf.put(pixels[i]).flip();
             GL11.glTexSubImage2D(GL11.GL_TEXTURE_2D, 0,
                     r[0], r[1], r[2], r[3],
