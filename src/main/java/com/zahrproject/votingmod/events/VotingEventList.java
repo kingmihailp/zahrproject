@@ -4,7 +4,9 @@ import com.zahrproject.votingmod.VotingManager;
 import com.zahrproject.votingmod.handler.FlipModelTracker;
 import com.zahrproject.votingmod.handler.FlipScreenTracker;
 import com.zahrproject.votingmod.handler.InvertColorsTracker;
+import com.zahrproject.votingmod.handler.RandomTextureTracker;
 import com.zahrproject.votingmod.network.InvertColorsPacket;
+import com.zahrproject.votingmod.network.RandomTexturePacket;
 import com.zahrproject.votingmod.handler.GoldenPlayerHandler;
 import com.zahrproject.votingmod.handler.HardcoreModeHandler;
 import com.zahrproject.votingmod.handler.HostileVillagersHandler;
@@ -90,6 +92,13 @@ public class VotingEventList {
     private static final ScheduledExecutorService INVERT_SCHEDULER =
             Executors.newSingleThreadScheduledExecutor(r -> {
                 Thread t = new Thread(r, "VotingMod-InvertRevert");
+                t.setDaemon(true);
+                return t;
+            });
+
+    private static final ScheduledExecutorService RANDOM_TEXTURE_SCHEDULER =
+            Executors.newSingleThreadScheduledExecutor(r -> {
+                Thread t = new Thread(r, "VotingMod-RandomTextureRevert");
                 t.setDaemon(true);
                 return t;
             });
@@ -1019,6 +1028,37 @@ public class VotingEventList {
                                 ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), timerOff);
                             }
                             broadcast(srv, "Взгляд эндермэна спал. Цвета восстановлены.");
+                        });
+                    }, durationMs, TimeUnit.MILLISECONDS);
+                }
+        ));
+
+        // ── Special: randomise block/item atlas textures for 5 minutes ──────────
+
+        events.add(new VotingEvent(
+                "Это точно не вирус?",
+                server -> {
+                    long durationMs = 5 * 60 * 1000L;
+                    RandomTextureTracker.setActive(System.currentTimeMillis() + durationMs, durationMs);
+                    RandomTexturePacket pktOn   = new RandomTexturePacket(true);
+                    EventTimerPacket    timerOn = new EventTimerPacket("Это точно не вирус?", durationMs, durationMs);
+                    for (ServerPlayer p : server.getPlayerList().getPlayers()) {
+                        ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), pktOn);
+                        ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), timerOn);
+                    }
+                    broadcast(server, "Это точно не вирус? Текстуры блоков и предметов перемешаны на 5 минут!");
+                    RANDOM_TEXTURE_SCHEDULER.schedule(() -> {
+                        RandomTextureTracker.clear();
+                        MinecraftServer srv = ServerLifecycleHooks.getCurrentServer();
+                        if (srv == null) return;
+                        srv.execute(() -> {
+                            RandomTexturePacket pktOff   = new RandomTexturePacket(false);
+                            EventTimerPacket    timerOff = new EventTimerPacket("Это точно не вирус?", 0, 0);
+                            for (ServerPlayer p : srv.getPlayerList().getPlayers()) {
+                                ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), pktOff);
+                                ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), timerOff);
+                            }
+                            broadcast(srv, "Текстуры восстановлены. Вирусов не обнаружено.");
                         });
                     }, durationMs, TimeUnit.MILLISECONDS);
                 }

@@ -84,5 +84,12 @@ public class ModNetwork {
                 InvertColorsPacket::encode,
                 InvertColorsPacket::decode,
                 InvertColorsPacket::handle);
+
+        // S2C: Server tells each client to shuffle (or restore) block/item atlas textures
+        CHANNEL.registerMessage(id++,
+                RandomTexturePacket.class,
+                RandomTexturePacket::encode,
+                RandomTexturePacket::decode,
+                RandomTexturePacket::handle);
     }
 }
