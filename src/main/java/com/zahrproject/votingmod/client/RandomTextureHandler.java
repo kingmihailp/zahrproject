@@ -69,11 +69,26 @@ public class RandomTextureHandler {
 
     @SubscribeEvent
     public static void onDisconnect(ClientPlayerNetworkEvent.LoggingOut event) {
-        if (active && initialized) restore();
-        active      = false;
-        initialized = false;
-        spriteRegions.clear();
-        originalSprites.clear();
+        boolean wasActive = active;
+        active = false;
+        if (wasActive && initialized) {
+            // LoggingOut can fire on the Netty thread; GL calls require the render thread.
+            // recordRenderCall() queues the work to run on the very next render frame,
+            // before the atlas could be invalidated, so the restore is always safe.
+            Runnable doRestore = () -> {
+                try { restore(); } finally {
+                    initialized = false;
+                    spriteRegions.clear();
+                    originalSprites.clear();
+                }
+            };
+            if (RenderSystem.isOnRenderThread()) doRestore.run();
+            else RenderSystem.recordRenderCall(doRestore::run);
+        } else {
+            initialized = false;
+            spriteRegions.clear();
+            originalSprites.clear();
+        }
     }
 
     // ── Initialization: download the atlas from GPU once per activation ───────
