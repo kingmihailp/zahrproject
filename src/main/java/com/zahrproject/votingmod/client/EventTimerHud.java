@@ -155,6 +155,7 @@ public class EventTimerHud {
         if (name.contains("агресс"))  return 0xFFBB7733; // Пассивная агрессия   → brown
         if (name.contains("сложн"))   return 0xFFDD1122; // Выше, сильнее, слож. → crimson
         if (name.contains("Голова"))  return 0xFFCC55FF; // Голова вниз          → purple
+        if (name.contains("хардкор")) return 0xFF800020; // Истинный хардкор     → dark burgundy
         return 0xFF88FF88;                                // fallback              → green
     }
 

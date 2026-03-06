@@ -1277,14 +1277,14 @@ public class VotingEventList {
                 }
         ));
 
-        // ── Special: blood moon — hard difficulty, 8x spawn rate, 2 heart cap ──
+        // ── Special: true hardcore — half-heart health cap for 5 minutes ────────
 
         events.add(new VotingEvent(
-                "Истинная кровавая луна",
+                "Истинный хардкор",
                 server -> {
-                    long duration = 8 * 60 * 1000L;
+                    long duration = 5 * 60 * 1000L;
                     BloodMoonHandler.activate(server, duration);
-                    broadcast(server, "Истинная кровавая луна! Сложность HARD, 8x спаунрейт, 2 сердца на 8 минут!");
+                    broadcast(server, "Истинный хардкор! У каждого игрока осталось пол сердца на 5 минут. Удачи.");
                 }
         ));
 
