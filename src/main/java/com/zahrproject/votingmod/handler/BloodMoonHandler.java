@@ -187,6 +187,14 @@ public class BloodMoonHandler {
     }
 
     @SubscribeEvent
+    public static void onPlayerRespawn(PlayerEvent.PlayerRespawnEvent event) {
+        if (!(event.getEntity() instanceof ServerPlayer player)) return;
+        if (!isActive()) return;
+        // Death-respawn resets attribute base values — reapply the reduction.
+        applyHealthReduction(player);
+    }
+
+    @SubscribeEvent
     public static void onPlayerLogout(PlayerEvent.PlayerLoggedOutEvent event) {
         if (!(event.getEntity() instanceof ServerPlayer player)) return;
         if (isActive()) {

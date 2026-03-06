@@ -230,6 +230,14 @@ public class ChildEventManager {
     }
 
     @SubscribeEvent
+    public static void onPlayerRespawn(PlayerEvent.PlayerRespawnEvent event) {
+        if (!(event.getEntity() instanceof ServerPlayer player)) return;
+        if (!childPlayers.contains(player.getUUID())) return;
+        // Death-respawn resets attribute base values — reapply the reduction.
+        applyChildHealth(player);
+    }
+
+    @SubscribeEvent
     public static void onPlayerLogout(PlayerEvent.PlayerLoggedOutEvent event) {
         if (!(event.getEntity() instanceof ServerPlayer player)) return;
         UUID uuid = player.getUUID();
