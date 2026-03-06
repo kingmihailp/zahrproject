@@ -9,7 +9,9 @@ import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
+import net.minecraft.network.protocol.game.ClientboundSetEntityMotionPacket;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Display;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
@@ -160,6 +162,9 @@ public class BlackHoleEntity extends Entity {
             // Pull: F = size² * k / dist²
             double force = Math.min((size * size * 0.20) / (dist * dist), 6.0);
             entity.setDeltaMovement(entity.getDeltaMovement().add(delta.normalize().scale(force)));
+            // For players, client-side prediction overrides deltaMovement unless we push the packet
+            if (entity instanceof ServerPlayer sp)
+                sp.connection.send(new ClientboundSetEntityMotionPacket(sp));
         }
 
         // 5. Destroy blocks every 2 ticks
