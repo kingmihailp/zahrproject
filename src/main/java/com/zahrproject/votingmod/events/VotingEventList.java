@@ -1144,6 +1144,57 @@ public class VotingEventList {
                 }
         ));
 
+        // ── Special: flint and steel (ignite all players) ─────────────────────
+
+        events.add(new VotingEvent(
+                "Кремень и сталь",
+                server -> {
+                    for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                        player.setSecondsOnFire(10);
+                    }
+                    broadcast(server, "Кремень и сталь! Все игроки подожжены!");
+                }
+        ));
+
+        // ── Special: mob tower (6-8 random mobs stacked on each other) ────────
+
+        events.add(new VotingEvent(
+                "Призвать башню из мобов рядом с каждым игроком",
+                server -> {
+                    List<EntityType<?>> spawnable = new ArrayList<>();
+                    for (EntityType<?> type : BuiltInRegistries.ENTITY_TYPE) {
+                        if (type.getCategory() != MobCategory.MISC) {
+                            spawnable.add(type);
+                        }
+                    }
+                    if (spawnable.isEmpty()) return;
+
+                    for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                        ServerLevel level = player.serverLevel();
+                        BlockPos pos = player.blockPosition();
+                        int count = 6 + RANDOM.nextInt(3); // 6..8
+
+                        Entity previous = null; // entity directly below the next one
+                        for (int i = 0; i < count; i++) {
+                            EntityType<?> chosen = spawnable.get(RANDOM.nextInt(spawnable.size()));
+                            Entity entity = chosen.create(level);
+                            if (entity == null) continue;
+                            entity.moveTo(pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5, 0, 0);
+                            if (entity instanceof Mob mob) {
+                                mob.finalizeSpawn(level, level.getCurrentDifficultyAt(pos),
+                                        MobSpawnType.EVENT, null, null);
+                            }
+                            level.addFreshEntity(entity);
+                            if (previous != null) {
+                                entity.startRiding(previous, true); // entity sits on top of previous
+                            }
+                            previous = entity;
+                        }
+                    }
+                    broadcast(server, "Башня из мобов! Рядом с каждым игроком появилась стопка из случайных мобов!");
+                }
+        ));
+
         return events;
     }
 
