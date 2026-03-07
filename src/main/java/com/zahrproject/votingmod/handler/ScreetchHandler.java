@@ -6,6 +6,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.phys.Vec3;
@@ -142,6 +144,11 @@ public class ScreetchHandler {
 
             level.addFreshEntity(screetch);
             activeScreetch.put(uuid, screetch.getUUID());
+
+            // Тихий «тссс» — звук шипения крипера на высокой тональности,
+            // слышен только цели (playNotifySound отправляет пакет только этому игроку)
+            player.playNotifySound(SoundEvents.CREEPER_PRIMED,
+                    SoundSource.HOSTILE, 0.45f, 1.9f);
 
             // 30 секунд до следующего спавна (после гибели/откуса этого)
             spawnCooldown.put(uuid, 600);
