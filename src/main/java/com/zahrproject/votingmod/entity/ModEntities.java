@@ -19,4 +19,12 @@ public class ModEntities {
                             .clientTrackingRange(256)
                             .updateInterval(1)
                             .build("black_hole"));
+
+    public static final RegistryObject<EntityType<ScreetchEntity>> SCREETCH =
+            ENTITIES.register("screetch", () ->
+                    EntityType.Builder.<ScreetchEntity>of(ScreetchEntity::new, MobCategory.MISC)
+                            .sized(0.8f, 0.6f)
+                            .clientTrackingRange(32)
+                            .updateInterval(1)
+                            .build("screetch"));
 }

@@ -2,6 +2,7 @@ package com.zahrproject.votingmod;
 
 import com.mojang.logging.LogUtils;
 import com.zahrproject.votingmod.client.BlackHoleRenderer;
+import com.zahrproject.votingmod.client.ScreetchRenderer;
 import com.zahrproject.votingmod.client.ChildRenderHandler;
 import com.zahrproject.votingmod.client.EventTimerHud;
 import com.zahrproject.votingmod.client.GoldenOverlayLayer;
@@ -35,11 +36,13 @@ import com.zahrproject.votingmod.handler.MeteorRainHandler;
 import com.zahrproject.votingmod.handler.SkateboardHandler;
 import com.zahrproject.votingmod.handler.SuperPickaxeHandler;
 import com.zahrproject.votingmod.handler.MShotHandler;
+import com.zahrproject.votingmod.handler.ScreetchHandler;
 import com.zahrproject.votingmod.handler.XShotHandler;
 import com.zahrproject.votingmod.network.ModNetwork;
 import com.zahrproject.votingmod.recipe.ModRecipes;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.EntityRenderersEvent;
+import net.minecraft.client.model.geom.ModelLayerLocation;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.event.server.ServerStartingEvent;
@@ -87,6 +90,7 @@ public class VotingMod {
         MinecraftForge.EVENT_BUS.register(BloodMoonHandler.class);
         MinecraftForge.EVENT_BUS.register(MobEffectsHandler.class);
         MinecraftForge.EVENT_BUS.register(AntiGravityHandler.class);
+        MinecraftForge.EVENT_BUS.register(ScreetchHandler.class);
         LOGGER.info("[VotingMod] Mod initialized!");
     }
 
@@ -134,6 +138,13 @@ public class VotingMod {
         @SubscribeEvent
         public static void onRegisterRenderers(EntityRenderersEvent.RegisterRenderers event) {
             event.registerEntityRenderer(ModEntities.BLACK_HOLE.get(), BlackHoleRenderer::new);
+            event.registerEntityRenderer(ModEntities.SCREETCH.get(), ScreetchRenderer::new);
+        }
+
+        @SubscribeEvent
+        public static void onRegisterLayers(EntityRenderersEvent.RegisterLayerDefinitions event) {
+            event.registerLayerDefinition(ScreetchRenderer.LAYER_LOCATION,
+                    ScreetchModel::createBodyLayer);
         }
     }
 }

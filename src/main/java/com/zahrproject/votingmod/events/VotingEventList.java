@@ -7,6 +7,7 @@ import com.zahrproject.votingmod.handler.InvertColorsTracker;
 import com.zahrproject.votingmod.handler.RandomTextureTracker;
 import com.zahrproject.votingmod.handler.BloodMoonHandler;
 import com.zahrproject.votingmod.handler.MobEffectsHandler;
+import com.zahrproject.votingmod.handler.ScreetchHandler;
 import com.zahrproject.votingmod.network.InvertColorsPacket;
 import com.zahrproject.votingmod.network.RandomTexturePacket;
 import com.zahrproject.votingmod.handler.GoldenPlayerHandler;
@@ -1347,6 +1348,41 @@ public class VotingEventList {
                     long duration = 8 * 60 * 1000L;
                     MobEffectsHandler.activate(server, duration);
                     broadcast(server, "Интеграция с effects! Каждый новый моб получает случайный бесконечный эффект на 8 минут.");
+                }
+        ));
+
+        // ── Они такая мелочь — скритчи появляются за спиной в темноте ───────
+
+        events.add(new VotingEvent(
+                "они такая мелочь",
+                server -> {
+                    long durationMs = 10 * 60 * 1000L;
+
+                    ScreetchHandler.activate(server);
+
+                    EventTimerPacket timerPkt = new EventTimerPacket(
+                            "они такая мелочь", durationMs, durationMs);
+                    for (ServerPlayer p : server.getPlayerList().getPlayers())
+                        ModNetwork.CHANNEL.send(
+                                net.minecraftforge.network.PacketDistributor.PLAYER.with(() -> p),
+                                timerPkt);
+
+                    // Schedule deactivation after 10 minutes
+                    java.util.concurrent.Executors
+                            .newSingleThreadScheduledExecutor(r -> {
+                                Thread t = new Thread(r, "VotingMod-ScreetchEnd");
+                                t.setDaemon(true);
+                                return t;
+                            })
+                            .schedule(() -> {
+                                ScreetchHandler.deactivate();
+                                EventTimerPacket timerEnd = new EventTimerPacket(
+                                        "они такая мелочь", -1, durationMs);
+                                for (ServerPlayer p : server.getPlayerList().getPlayers())
+                                    ModNetwork.CHANNEL.send(
+                                            net.minecraftforge.network.PacketDistributor.PLAYER.with(() -> p),
+                                            timerEnd);
+                            }, 10, java.util.concurrent.TimeUnit.MINUTES);
                 }
         ));
 
