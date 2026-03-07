@@ -136,9 +136,17 @@ public class EventTimerHud {
             int barInnerW = BG_W - PAD * 2;
             int filled    = Math.round(fraction * barInnerW);
 
-            g.fill(barX,     barY, barX + barInnerW, barY + BAR_H, 0xFF333333);
+            g.fill(barX, barY, barX + barInnerW, barY + BAR_H, 0xFF333333);
             if (filled > 0) {
-                g.fill(barX, barY, barX + filled,    barY + BAR_H, eventColor);
+                if (isMobEffectsEvent(name)) {
+                    // Gradient bar: blue → red → green (column by column)
+                    for (int px = 0; px < filled; px++) {
+                        g.fill(barX + px, barY, barX + px + 1, barY + BAR_H,
+                                blueRedGreenGradient((float) px / barInnerW));
+                    }
+                } else {
+                    g.fill(barX, barY, barX + filled, barY + BAR_H, eventColor);
+                }
             }
 
             idx++;
@@ -149,14 +157,55 @@ public class EventTimerHud {
 
     /** Returns a colour for the named event, falling back to green. */
     private static int colorForEvent(String name) {
-        if (name.contains("дном"))    return 0xFFFF6060; // Все вверх дном       → red
-        if (name.contains("Мидас"))   return 0xFFFFD700; // Мидас                → gold
-        if (name.contains("детство")) return 0xFF5BC0FF; // Обратно в детство    → light blue
-        if (name.contains("агресс"))  return 0xFFBB7733; // Пассивная агрессия   → brown
-        if (name.contains("сложн"))   return 0xFFDD1122; // Выше, сильнее, слож. → crimson
-        if (name.contains("Голова"))  return 0xFFCC55FF; // Голова вниз          → purple
-        if (name.contains("хардкор")) return 0xFF800020; // Истинный хардкор     → dark burgundy
-        return 0xFF88FF88;                                // fallback              → green
+        if (name.contains("дном"))       return 0xFFFF6060; // Все вверх дном       → red
+        if (name.contains("Мидас"))      return 0xFFFFD700; // Мидас                → gold
+        if (name.contains("детство"))    return 0xFF5BC0FF; // Обратно в детство    → light blue
+        if (name.contains("агресс"))     return 0xFFBB7733; // Пассивная агрессия   → brown
+        if (name.contains("сложн"))      return 0xFFDD1122; // Выше, сильнее, слож. → crimson
+        if (name.contains("Голова"))     return 0xFFCC55FF; // Голова вниз          → purple
+        if (name.contains("хардкор"))    return 0xFF800020; // Истинный хардкор     → dark burgundy
+        if (isMobEffectsEvent(name))     return animatedBRGColor();   // animated blue-red-green
+        return 0xFF88FF88;                                 // fallback              → green
+    }
+
+    private static boolean isMobEffectsEvent(String name) {
+        return name.contains("mob effects");
+    }
+
+    /**
+     * Animates through blue → red → green using per-channel sine waves
+     * with 120° (2π/3) phase offsets, giving a smooth RGB cycle.
+     */
+    private static int animatedBRGColor() {
+        double t = System.currentTimeMillis() * 0.002;
+        int r = (int) (127 + 127 * Math.sin(t));
+        int g = (int) (127 + 127 * Math.sin(t + 2.094)); // +120°
+        int b = (int) (127 + 127 * Math.sin(t + 4.189)); // +240°
+        return 0xFF000000 | (clamp(r) << 16) | (clamp(g) << 8) | clamp(b);
+    }
+
+    /**
+     * Static blue→red→green gradient for the fill bar.
+     * t ∈ [0,1]: 0..0.5 interpolates blue→red; 0.5..1 interpolates red→green.
+     */
+    private static int blueRedGreenGradient(float t) {
+        int r, g, b;
+        if (t < 0.5f) {
+            float s = t * 2f;          // 0..1
+            r = clamp((int) (255 * s));
+            g = 0;
+            b = clamp((int) (255 * (1f - s)));
+        } else {
+            float s = (t - 0.5f) * 2f; // 0..1
+            r = clamp((int) (255 * (1f - s)));
+            g = clamp((int) (255 * s));
+            b = 0;
+        }
+        return 0xFF000000 | (r << 16) | (g << 8) | b;
+    }
+
+    private static int clamp(int v) {
+        return Math.max(0, Math.min(255, v));
     }
 
     /** Replaces the alpha byte of a fully-opaque ARGB colour. */

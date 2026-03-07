@@ -6,6 +6,7 @@ import com.zahrproject.votingmod.handler.FlipScreenTracker;
 import com.zahrproject.votingmod.handler.InvertColorsTracker;
 import com.zahrproject.votingmod.handler.RandomTextureTracker;
 import com.zahrproject.votingmod.handler.BloodMoonHandler;
+import com.zahrproject.votingmod.handler.MobEffectsHandler;
 import com.zahrproject.votingmod.network.InvertColorsPacket;
 import com.zahrproject.votingmod.network.RandomTexturePacket;
 import com.zahrproject.votingmod.handler.GoldenPlayerHandler;
@@ -52,6 +53,7 @@ import net.minecraft.world.entity.item.FallingBlockEntity;
 import net.minecraft.world.entity.item.PrimedTnt;
 import net.minecraft.world.entity.projectile.FireworkRocketEntity;
 import net.minecraft.world.entity.monster.Creeper;
+import net.minecraft.world.entity.monster.Pillager;
 import net.minecraft.world.entity.monster.Zombie;
 import com.zahrproject.votingmod.enchantments.ModEnchantments;
 import net.minecraft.world.item.EnchantedBookItem;
@@ -1288,6 +1290,48 @@ public class VotingEventList {
                 }
         ));
 
+        // ── Этот парень любит зажечь! — pillager with X-Shot crossbow + firework ─
+
+        events.add(new VotingEvent(
+                "Этот парень любит зажечь!",
+                server -> {
+                    for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                        ServerLevel level = player.serverLevel();
+                        BlockPos pos = player.blockPosition();
+
+                        Pillager pillager = new Pillager(EntityType.PILLAGER, level);
+                        double ox = (RANDOM.nextDouble() - 0.5) * 6;
+                        double oz = (RANDOM.nextDouble() - 0.5) * 6;
+                        pillager.moveTo(pos.getX() + ox, pos.getY(), pos.getZ() + oz,
+                                RANDOM.nextFloat() * 360, 0);
+                        pillager.finalizeSpawn(level, level.getCurrentDifficultyAt(pos),
+                                MobSpawnType.EVENT, null, null);
+
+                        // X-Shot crossbow in main hand
+                        ItemStack crossbow = new ItemStack(Items.CROSSBOW);
+                        crossbow.enchant(ModEnchantments.XSHOT.get(), 1);
+                        pillager.setItemSlot(EquipmentSlot.MAINHAND, crossbow);
+
+                        // Random firework in off hand
+                        pillager.setItemSlot(EquipmentSlot.OFFHAND, createRandomFirework());
+
+                        level.addFreshEntity(pillager);
+                    }
+                    broadcast(server, "Этот парень любит зажечь! Разбойник с арбалетом уже идёт к вам!");
+                }
+        ));
+
+        // ── Интеграция с mob effects — every spawning mob gets a random infinite effect ─
+
+        events.add(new VotingEvent(
+                "Интеграция с mob effects",
+                server -> {
+                    long duration = 3 * 60 * 1000L;
+                    MobEffectsHandler.activate(server, duration);
+                    broadcast(server, "Интеграция с mob effects! Каждый новый моб получает случайный бесконечный эффект на 3 минуты.");
+                }
+        ));
+
         return events;
     }
 
@@ -1304,6 +1348,30 @@ public class VotingEventList {
     private static void broadcast(MinecraftServer server, String message) {
         server.getPlayerList().broadcastSystemMessage(
                 Component.literal("§6[Голосование] §e" + message), false);
+    }
+
+    /** Creates a firework rocket ItemStack with a randomised explosion. */
+    private static ItemStack createRandomFirework() {
+        ItemStack firework = new ItemStack(Items.FIREWORK_ROCKET);
+
+        CompoundTag explosion = new CompoundTag();
+        explosion.putByte("Type", (byte) RANDOM.nextInt(5));   // 0-4: shapes
+        explosion.putBoolean("Flicker", RANDOM.nextBoolean());
+        explosion.putBoolean("Trail",   RANDOM.nextBoolean());
+        int numColors = RANDOM.nextInt(3) + 1;
+        int[] colors  = new int[numColors];
+        for (int i = 0; i < numColors; i++) colors[i] = RANDOM.nextInt(0x1000000);
+        explosion.putIntArray("Colors", colors);
+
+        ListTag explosionsList = new ListTag();
+        explosionsList.add(explosion);
+
+        CompoundTag fw = new CompoundTag();
+        fw.put("Explosions", explosionsList);
+        fw.putByte("Flight", (byte) (RANDOM.nextInt(3) + 1));
+
+        firework.getOrCreateTag().put("Fireworks", fw);
+        return firework;
     }
 
     /**
