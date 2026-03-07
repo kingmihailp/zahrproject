@@ -2,6 +2,7 @@ package com.zahrproject.votingmod.recipe;
 
 import com.zahrproject.votingmod.enchantments.ModEnchantments;
 import net.minecraft.core.RegistryAccess;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.EnchantedBookItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -24,8 +25,8 @@ import net.minecraft.world.level.Level;
  */
 public class MShotBookRecipe extends CustomRecipe {
 
-    public MShotBookRecipe(CraftingBookCategory category) {
-        super(category);
+    public MShotBookRecipe(ResourceLocation id, CraftingBookCategory category) {
+        super(id, category);
     }
 
     @Override
