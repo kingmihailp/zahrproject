@@ -6,5 +6,6 @@
   "item.votingmod.voting_disc.desc": "лучше не включать это",
   "enchantment.votingmod.xshot": "X-выстрел",
   "enchantment.votingmod.super_pickaxe": "Супер кирка",
-  "enchantment.votingmod.mshot": "M-выстрел"
+  "enchantment.votingmod.mshot": "M-выстрел",
+  "enchantment.votingmod.anti_gravity": "Антигравитация"
 }
