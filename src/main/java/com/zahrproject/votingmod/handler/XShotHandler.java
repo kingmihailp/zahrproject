@@ -7,8 +7,11 @@ import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.AbstractArrow;
+import net.minecraft.world.entity.projectile.Arrow;
 import net.minecraft.world.entity.projectile.FireworkRocketEntity;
 import net.minecraft.world.item.ArrowItem;
 import net.minecraft.world.item.Item;
@@ -18,14 +21,19 @@ import net.minecraft.world.item.CrossbowItem;
 import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.level.Level;
-import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraftforge.event.entity.EntityJoinLevelEvent;
 import net.minecraftforge.event.entity.living.LivingEntityUseItemEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
+import javax.annotation.Nullable;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Random;
 
@@ -153,6 +161,114 @@ public class XShotHandler {
         level.playSound(null, sp.getX(), sp.getY(), sp.getZ(),
                 SoundEvents.CROSSBOW_SHOOT, SoundSource.PLAYERS,
                 1.0f, 0.8f + RANDOM.nextFloat() * 0.4f);
+    }
+
+    // ── Mob X-Shot: extra projectiles when a mob fires an X-Shot crossbow ────
+
+    /**
+     * Tag written onto every projectile spawned by our extra-shot logic so that
+     * re-entrant EntityJoinLevelEvent calls from those entities are skipped.
+     */
+    private static final String XSHOT_EXTRA_TAG = "votingmod_xshot_extra";
+
+    /**
+     * When any non-player mob fires a crossbow that carries X-Shot, spawn
+     * {@code SHOT_COUNT - 1} additional projectiles identical in kind but with
+     * random spread, mirroring what {@link #onRightClick} does for players.
+     *
+     * Detection strategy:
+     *  • For {@link AbstractArrow}: {@code arrow.getOwner()} returns the shooter directly.
+     *  • For {@link FireworkRocketEntity}: {@code attachedToEntity} is private with no
+     *    public getter, so we search for a living entity with an X-Shot crossbow within
+     *    2 blocks of the spawn point (the firework is spawned at the shooter's position).
+     */
+    @SubscribeEvent
+    public static void onMobCrossbowProjectileJoin(EntityJoinLevelEvent event) {
+        if (event.getLevel().isClientSide()) return;
+        if (!(event.getLevel() instanceof ServerLevel level)) return;
+
+        Entity entity = event.getEntity();
+
+        // Skip projectiles we spawned ourselves (prevents infinite recursion)
+        if (entity.getPersistentData().getBoolean(XSHOT_EXTRA_TAG)) return;
+
+        // Only care about arrows and fireworks
+        if (!(entity instanceof AbstractArrow) && !(entity instanceof FireworkRocketEntity)) return;
+
+        LivingEntity shooter = findMobXShotShooter(entity, level);
+        if (shooter == null) return;
+
+        Vec3 velocity = entity.getDeltaMovement();
+        double speed  = velocity.length();
+        if (speed < 0.01) return;
+        Vec3 dir = velocity.normalize();
+        // Choose an "up" vector not collinear with the shot direction
+        Vec3 up = Math.abs(dir.dot(new Vec3(0, 1, 0))) > 0.99
+                ? new Vec3(1, 0, 0)
+                : new Vec3(0, 1, 0);
+
+        // Read firework item from original entity via public NBT serialisation
+        ItemStack fireworkItem = ItemStack.EMPTY;
+        if (entity instanceof FireworkRocketEntity fw) {
+            CompoundTag fwNbt = new CompoundTag();
+            fw.saveWithoutId(fwNbt);
+            fireworkItem = fwNbt.contains("FireworksItem")
+                    ? ItemStack.of(fwNbt.getCompound("FireworksItem"))
+                    : new ItemStack(Items.FIREWORK_ROCKET);
+        }
+
+        for (int i = 0; i < SHOT_COUNT - 1; i++) {
+            float hSpread = (RANDOM.nextFloat() - 0.5f) * SPREAD_DEGREES * 2;
+            float vSpread = (RANDOM.nextFloat() - 0.5f) * SPREAD_DEGREES * 2;
+            Vec3 spreadVel = rotateDirection(dir, up, hSpread, vSpread).scale(speed);
+
+            if (entity instanceof AbstractArrow) {
+                Arrow extra = new Arrow(level, shooter);
+                extra.setPos(entity.getX(), entity.getY(), entity.getZ());
+                extra.setDeltaMovement(spreadVel);
+                extra.setCritArrow(true);
+                extra.setShotFromCrossbow(true);
+                extra.setSoundEvent(SoundEvents.CROSSBOW_HIT);
+                extra.pickup = AbstractArrow.Pickup.DISALLOWED;
+                extra.getPersistentData().putBoolean(XSHOT_EXTRA_TAG, true);
+                level.addFreshEntity(extra);
+            } else {
+                FireworkRocketEntity extra = new FireworkRocketEntity(
+                        level, fireworkItem.copy(), shooter,
+                        entity.getX(), entity.getY(), entity.getZ(), true);
+                extra.setDeltaMovement(spreadVel);
+                extra.getPersistentData().putBoolean(XSHOT_EXTRA_TAG, true);
+                level.addFreshEntity(extra);
+            }
+        }
+    }
+
+    /**
+     * Returns the non-player {@link LivingEntity} that fired this projectile
+     * via an X-Shot crossbow, or {@code null} if this projectile doesn't
+     * qualify (fired by a player, or shooter has no X-Shot).
+     */
+    @Nullable
+    private static LivingEntity findMobXShotShooter(Entity entity, ServerLevel level) {
+        if (entity instanceof AbstractArrow arrow) {
+            Entity owner = arrow.getOwner();
+            // Players are handled by onRightClick — skip them here
+            if (owner instanceof Player || !(owner instanceof LivingEntity le)) return null;
+            return hasXShot(le.getMainHandItem()) ? le : null;
+        }
+        if (entity instanceof FireworkRocketEntity) {
+            // Firework has no public owner getter; find the closest non-player
+            // living entity with an X-Shot crossbow within 2 blocks of spawn point.
+            AABB box = new AABB(
+                    entity.getX() - 1.5, entity.getY() - 2.5, entity.getZ() - 1.5,
+                    entity.getX() + 1.5, entity.getY() + 2.5, entity.getZ() + 1.5);
+            return level.getEntitiesOfClass(LivingEntity.class, box,
+                            e -> !(e instanceof Player) && hasXShot(e.getMainHandItem()))
+                    .stream()
+                    .min(Comparator.comparingDouble(e -> e.distanceToSqr(entity)))
+                    .orElse(null);
+        }
+        return null;
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
