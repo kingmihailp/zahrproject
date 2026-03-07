@@ -1,12 +1,14 @@
 package com.zahrproject.votingmod.client;
 
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.math.Axis;
 import com.zahrproject.votingmod.entity.ScreetchEntity;
-import net.minecraft.client.model.geom.ModelLayerLocation;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
-import net.minecraft.client.renderer.entity.MobRenderer;
+import net.minecraft.client.renderer.texture.OverlayTexture;
+import net.minecraft.client.model.geom.ModelLayerLocation;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
@@ -14,12 +16,15 @@ import net.minecraftforge.api.distmarker.OnlyIn;
 /**
  * Рендерер скритча.
  *
- * Использует {@link ScreetchModel} и текстуру textures/entity/screetch.png.
- * Глаза рендерятся отдельным проходом с EYES рендертипом (полное свечение,
- * игнорирует освещение уровня) — это создаёт эффект светящихся глаз.
+ * Extends EntityRenderer (не MobRenderer) потому что ScreetchEntity
+ * наследуется от Entity, а не от Mob.
+ *
+ * Два прохода:
+ *   1. Основная текстура (screetch.png) — обычное освещение.
+ *   2. Текстура глаз   (screetch_eyes.png) — RenderType.eyes (полное свечение).
  */
 @OnlyIn(Dist.CLIENT)
-public class ScreetchRenderer extends MobRenderer<ScreetchEntity, ScreetchModel> {
+public class ScreetchRenderer extends EntityRenderer<ScreetchEntity> {
 
     public static final ModelLayerLocation LAYER_LOCATION =
             new ModelLayerLocation(
@@ -30,8 +35,11 @@ public class ScreetchRenderer extends MobRenderer<ScreetchEntity, ScreetchModel>
     private static final ResourceLocation TEXTURE_EYES =
             new ResourceLocation("votingmod", "textures/entity/screetch_eyes.png");
 
+    private final ScreetchModel model;
+
     public ScreetchRenderer(EntityRendererProvider.Context ctx) {
-        super(ctx, new ScreetchModel(ctx.bakeLayer(LAYER_LOCATION)), 0.4f);
+        super(ctx);
+        this.model = new ScreetchModel(ctx.bakeLayer(LAYER_LOCATION));
     }
 
     @Override
@@ -42,14 +50,36 @@ public class ScreetchRenderer extends MobRenderer<ScreetchEntity, ScreetchModel>
     @Override
     public void render(ScreetchEntity entity, float entityYaw, float partialTick,
                        PoseStack poseStack, MultiBufferSource bufferSource, int packedLight) {
-        super.render(entity, entityYaw, partialTick, poseStack, bufferSource, packedLight);
+        poseStack.pushPose();
 
-        // Second pass: render eyes with full-bright (EYES render type, like spiders/endermen)
-        this.model.renderToBuffer(
-                poseStack,
-                bufferSource.getBuffer(RenderType.eyes(TEXTURE_EYES)),
-                15728880, // max brightness
-                net.minecraft.client.renderer.texture.OverlayTexture.NO_OVERLAY,
+        // Rotate so the screetch faces its yaw
+        poseStack.mulPose(Axis.YP.rotationDegrees(180f - entityYaw));
+
+        // Scale down slightly (model is designed at ~10px = ~0.625 blocks)
+        float scale = 0.0625f;
+        poseStack.scale(scale, scale, scale);
+
+        // Animate the model
+        model.setupAnim(entity,
+                0f, 0f,
+                entity.tickCount + partialTick,
+                entity.getYRot() - entity.yRotO,
+                entity.getXRot());
+
+        // Pass 1: normal texture
+        model.renderToBuffer(poseStack,
+                bufferSource.getBuffer(RenderType.entityCutout(TEXTURE)),
+                packedLight, OverlayTexture.NO_OVERLAY,
                 1f, 1f, 1f, 1f);
+
+        // Pass 2: glowing eyes (ignores light level — always fully bright)
+        model.renderToBuffer(poseStack,
+                bufferSource.getBuffer(RenderType.eyes(TEXTURE_EYES)),
+                15728880, OverlayTexture.NO_OVERLAY,
+                1f, 1f, 1f, 1f);
+
+        poseStack.popPose();
+
+        super.render(entity, entityYaw, partialTick, poseStack, bufferSource, packedLight);
     }
 }

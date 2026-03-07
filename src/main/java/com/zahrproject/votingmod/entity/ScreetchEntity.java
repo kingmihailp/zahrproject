@@ -104,7 +104,7 @@ public class ScreetchEntity extends Entity {
         if (biteTimer >= BITE_TICKS) {
             // Bite! 8 HP = 4 hearts
             if (player.isAlive()) {
-                player.hurt(serverLevel.damageSources().mob(this), 8.0f);
+                player.hurt(serverLevel.damageSources().magic(), 8.0f);
             }
             this.discard();
         }

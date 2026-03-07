@@ -2,6 +2,7 @@ package com.zahrproject.votingmod;
 
 import com.mojang.logging.LogUtils;
 import com.zahrproject.votingmod.client.BlackHoleRenderer;
+import com.zahrproject.votingmod.client.ScreetchModel;
 import com.zahrproject.votingmod.client.ScreetchRenderer;
 import com.zahrproject.votingmod.client.ChildRenderHandler;
 import com.zahrproject.votingmod.client.EventTimerHud;
@@ -42,7 +43,6 @@ import com.zahrproject.votingmod.network.ModNetwork;
 import com.zahrproject.votingmod.recipe.ModRecipes;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.EntityRenderersEvent;
-import net.minecraft.client.model.geom.ModelLayerLocation;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.event.server.ServerStartingEvent;
