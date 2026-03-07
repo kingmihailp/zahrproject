@@ -797,9 +797,9 @@ public class VotingEventList {
                     for (ServerPlayer player : server.getPlayerList().getPlayers()) {
                         ServerLevel level = player.serverLevel();
                         BlockPos pos = player.blockPosition();
-                        for (int dx = -1; dx <= 1; dx++) {
+                        for (int i = 0; i < 3; i++) {
                             FallingBlockEntity anvil = FallingBlockEntity.fall(
-                                    level, pos.offset(dx, 15, 0), Blocks.ANVIL.defaultBlockState());
+                                    level, pos.above(15 + i * 4), Blocks.ANVIL.defaultBlockState());
                             anvil.dropItem = false;
                         }
                     }
