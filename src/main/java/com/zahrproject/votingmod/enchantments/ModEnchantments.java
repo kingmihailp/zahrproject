@@ -22,4 +22,7 @@ public class ModEnchantments {
 
     public static final RegistryObject<Enchantment> MSHOT =
             ENCHANTMENTS.register("mshot", MShotEnchantment::new);
+
+    public static final RegistryObject<Enchantment> ANTI_GRAVITY =
+            ENCHANTMENTS.register("anti_gravity", AntiGravityEnchantment::new);
 }

@@ -1280,6 +1280,23 @@ public class VotingEventList {
                 }
         ));
 
+        // ── Special: anti-gravity book ────────────────────────────────────────────
+
+        events.add(new VotingEvent(
+                "Выдать каждому игроку зачарованную книгу «Антигравитация 1»",
+                server -> {
+                    for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                        ItemStack book = new ItemStack(Items.ENCHANTED_BOOK);
+                        EnchantedBookItem.addEnchantment(book,
+                                new EnchantmentInstance(ModEnchantments.ANTI_GRAVITY.get(), 1));
+                        if (!player.getInventory().add(book)) {
+                            player.drop(book, false);
+                        }
+                    }
+                    broadcast(server, "Все получили книгу «Антигравитация 1»!");
+                }
+        ));
+
         // ── Special: true hardcore — half-heart health cap for 5 minutes ────────
 
         events.add(new VotingEvent(

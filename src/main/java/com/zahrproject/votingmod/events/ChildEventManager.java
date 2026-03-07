@@ -11,6 +11,7 @@ import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.animal.Chicken;
 import net.minecraft.world.entity.player.Player;
+import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.EntityEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
@@ -139,6 +140,41 @@ public class ChildEventManager {
         EntityDimensions orig = event.getNewSize();
         event.setNewSize(EntityDimensions.scalable(orig.width * 0.5f, orig.height * 0.5f));
         event.setNewEyeHeight(event.getNewEyeHeight() * 0.5f);
+    }
+
+    /**
+     * Steers chickens ridden by child players.
+     *
+     * Runs at the END of each server tick (after all entity ticks have finished)
+     * and sets the chicken's navigation target 8 blocks ahead/behind in the
+     * direction the player is looking, based on their forward/back input.
+     * Strafing is not supported intentionally — riding a chicken is quirky.
+     */
+    @SubscribeEvent
+    public static void onServerTick(TickEvent.ServerTickEvent event) {
+        if (event.phase != TickEvent.Phase.END) return;
+        MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
+        if (server == null) return;
+
+        for (UUID uuid : childPlayers) {
+            ServerPlayer player = server.getPlayerList().getPlayer(uuid);
+            if (player == null || !player.isPassenger()) continue;
+            if (!(player.getVehicle() instanceof Chicken chicken)) continue;
+
+            float forward = player.zza;
+            if (Math.abs(forward) < 0.01f) {
+                chicken.getNavigation().stop();
+                continue;
+            }
+
+            float yawRad = (float) Math.toRadians(player.getYRot());
+            float sign   = forward > 0 ? 1f : -1f;
+            // Minecraft: south = yaw 0 → dx = -sin(yaw), dz = cos(yaw)
+            double targetX = chicken.getX() + sign * (-Math.sin(yawRad)) * 8;
+            double targetZ = chicken.getZ() + sign *   Math.cos(yawRad)  * 8;
+
+            chicken.getNavigation().moveTo(targetX, chicken.getY(), targetZ, 1.5);
+        }
     }
 
     @SubscribeEvent
