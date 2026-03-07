@@ -797,9 +797,11 @@ public class VotingEventList {
                     for (ServerPlayer player : server.getPlayerList().getPlayers()) {
                         ServerLevel level = player.serverLevel();
                         BlockPos pos = player.blockPosition();
-                        FallingBlockEntity anvil = FallingBlockEntity.fall(
-                                level, pos.above(15), Blocks.ANVIL.defaultBlockState());
-                        anvil.dropItem = false;
+                        for (int dx = -1; dx <= 1; dx++) {
+                            FallingBlockEntity anvil = FallingBlockEntity.fall(
+                                    level, pos.offset(dx, 15, 0), Blocks.ANVIL.defaultBlockState());
+                            anvil.dropItem = false;
+                        }
                     }
                     broadcast(server, "Тяжёлая дума! Наковальни падают на игроков!");
                 }
