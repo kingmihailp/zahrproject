@@ -32,8 +32,10 @@ import com.zahrproject.votingmod.handler.ArmorStandLorHandler;
 import com.zahrproject.votingmod.handler.MeteorRainHandler;
 import com.zahrproject.votingmod.handler.SkateboardHandler;
 import com.zahrproject.votingmod.handler.SuperPickaxeHandler;
+import com.zahrproject.votingmod.handler.MShotHandler;
 import com.zahrproject.votingmod.handler.XShotHandler;
 import com.zahrproject.votingmod.network.ModNetwork;
+import com.zahrproject.votingmod.recipe.ModRecipes;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.EntityRenderersEvent;
 import net.minecraftforge.common.MinecraftForge;
@@ -62,6 +64,7 @@ public class VotingMod {
         ModItems.ITEMS.register(modEventBus);
         ModSounds.SOUNDS.register(modEventBus);
         ModEntities.ENTITIES.register(modEventBus);
+        ModRecipes.RECIPE_SERIALIZERS.register(modEventBus);
         MinecraftForge.EVENT_BUS.register(this);
         MinecraftForge.EVENT_BUS.register(new FlipScreenTracker());
         MinecraftForge.EVENT_BUS.register(new ForgeEventHandler());
@@ -74,6 +77,7 @@ public class VotingMod {
         MinecraftForge.EVENT_BUS.register(MeteorRainHandler.class);
         MinecraftForge.EVENT_BUS.register(ArmorStandLorHandler.class);
         MinecraftForge.EVENT_BUS.register(XShotHandler.class);
+        MinecraftForge.EVENT_BUS.register(MShotHandler.class);
         MinecraftForge.EVENT_BUS.register(SuperPickaxeHandler.class);
         MinecraftForge.EVENT_BUS.register(new FlipModelTracker());
         MinecraftForge.EVENT_BUS.register(new InvertColorsTracker());
