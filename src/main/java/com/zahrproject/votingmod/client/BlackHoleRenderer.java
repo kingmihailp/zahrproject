@@ -6,11 +6,14 @@ import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.api.distmarker.OnlyIn;
 
 /**
  * No-op renderer for BlackHoleEntity.
  * All visual effects are handled by server-side particles (SQUID_INK, PORTAL, LARGE_SMOKE).
  */
+@OnlyIn(Dist.CLIENT)
 public class BlackHoleRenderer extends EntityRenderer<BlackHoleEntity> {
 
     public BlackHoleRenderer(EntityRendererProvider.Context context) {

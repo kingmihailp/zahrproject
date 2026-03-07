@@ -4,6 +4,8 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.network.chat.Component;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.api.distmarker.OnlyIn;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -15,6 +17,7 @@ import java.util.List;
  * Supports a custom accent color for YES (green) / NO (red) styling.
  * Default accent is blue.
  */
+@OnlyIn(Dist.CLIENT)
 public class MultilineButton extends Button {
 
     /** Preset accent colors. */

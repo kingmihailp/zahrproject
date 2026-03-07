@@ -4,6 +4,8 @@ import com.zahrproject.votingmod.events.ChildEventManager;
 import net.minecraft.world.entity.player.Player;
 import net.minecraftforge.client.event.RenderLivingEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.api.distmarker.OnlyIn;
 
 /**
  * Client-only render handler.
@@ -11,6 +13,7 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
  * so other players see you as a small character.
  * Registered on the client side only in {@link com.zahrproject.votingmod.VotingMod#clientSetup}.
  */
+@OnlyIn(Dist.CLIENT)
 public class ChildRenderHandler {
 
     @SubscribeEvent

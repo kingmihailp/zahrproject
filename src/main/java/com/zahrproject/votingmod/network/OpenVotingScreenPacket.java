@@ -3,6 +3,8 @@ package com.zahrproject.votingmod.network;
 import com.zahrproject.votingmod.client.VotingScreen;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.network.NetworkEvent;
 
 import java.util.function.Supplier;
@@ -37,10 +39,11 @@ public class OpenVotingScreenPacket {
     }
 
     public static void handle(OpenVotingScreenPacket packet, Supplier<NetworkEvent.Context> ctx) {
-        ctx.get().enqueueWork(() -> {
-            Minecraft mc = Minecraft.getInstance();
-            mc.setScreen(new VotingScreen(packet.optionA, packet.optionB, packet.durationSeconds));
-        });
+        ctx.get().enqueueWork(() ->
+                DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
+                    Minecraft mc = Minecraft.getInstance();
+                    mc.setScreen(new VotingScreen(packet.optionA, packet.optionB, packet.durationSeconds));
+                }));
         ctx.get().setPacketHandled(true);
     }
 }

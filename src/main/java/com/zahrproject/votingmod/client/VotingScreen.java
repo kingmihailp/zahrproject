@@ -5,6 +5,8 @@ import com.zahrproject.votingmod.network.VotePacket;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.api.distmarker.OnlyIn;
 
 /**
  * Voting screen: two randomly-picked events side by side.
@@ -20,6 +22,7 @@ import net.minecraft.network.chat.Component;
  *  │    рядом с игроками ]          на грозу        ]        │
  *  └──────────────────────────────────────────────────────────┘
  */
+@OnlyIn(Dist.CLIENT)
 public class VotingScreen extends Screen {
 
     // ── Data ──────────────────────────────────────────────────────────────────
