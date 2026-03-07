@@ -1,7 +1,9 @@
 package com.zahrproject.votingmod.network;
 
-import com.zahrproject.votingmod.client.PlayerFlipRenderHandler;
+import com.zahrproject.votingmod.client.ClientPacketHandlers;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.network.NetworkEvent;
 
 import java.util.function.Supplier;
@@ -27,7 +29,9 @@ public class FlipModelPacket {
     }
 
     public static void handle(FlipModelPacket pkt, Supplier<NetworkEvent.Context> ctx) {
-        ctx.get().enqueueWork(() -> PlayerFlipRenderHandler.setFlipped(pkt.active));
+        ctx.get().enqueueWork(() ->
+                DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () ->
+                        ClientPacketHandlers.handleFlipModel(pkt.active)));
         ctx.get().setPacketHandled(true);
     }
 }

@@ -1,9 +1,8 @@
 package com.zahrproject.votingmod.network;
 
+import com.zahrproject.votingmod.client.ClientPacketHandlers;
 import com.zahrproject.votingmod.events.ChildEventManager;
-import net.minecraft.client.Minecraft;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.world.entity.player.Player;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.network.NetworkEvent;
@@ -47,14 +46,8 @@ public class SyncChildStatePacket {
         ctx.get().enqueueWork(() -> {
             ChildEventManager.setChildPlayers(packet.childUUIDs);
             // Refresh bounding boxes so the client uses the correct hitbox immediately
-            DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
-                Minecraft mc = Minecraft.getInstance();
-                if (mc.level != null) {
-                    for (Player player : mc.level.players()) {
-                        player.refreshDimensions();
-                    }
-                }
-            });
+            DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () ->
+                    ClientPacketHandlers.refreshChildDimensions());
         });
         ctx.get().setPacketHandled(true);
     }

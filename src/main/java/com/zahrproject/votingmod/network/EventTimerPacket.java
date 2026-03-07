@@ -1,7 +1,9 @@
 package com.zahrproject.votingmod.network;
 
-import com.zahrproject.votingmod.client.EventTimerHud;
+import com.zahrproject.votingmod.client.ClientPacketHandlers;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.network.NetworkEvent;
 
 import java.util.function.Supplier;
@@ -11,10 +13,6 @@ import java.util.function.Supplier;
  * Starts, updates or removes a named event timer on the HUD.
  *   remainingMs > 0  → show/update timer for this event
  *   remainingMs <= 0 → remove timer for this event
- *
- * totalDurationMs is the full event duration (used so the fill bar fraction
- * always reflects progress relative to the whole event, not just since
- * the last reconnect).
  */
 public class EventTimerPacket {
 
@@ -40,7 +38,9 @@ public class EventTimerPacket {
 
     public static void handle(EventTimerPacket packet, Supplier<NetworkEvent.Context> ctx) {
         ctx.get().enqueueWork(() ->
-                EventTimerHud.setTimer(packet.eventName, packet.remainingMs, packet.totalDurationMs));
+                DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () ->
+                        ClientPacketHandlers.handleEventTimer(
+                                packet.eventName, packet.remainingMs, packet.totalDurationMs)));
         ctx.get().setPacketHandled(true);
     }
 }

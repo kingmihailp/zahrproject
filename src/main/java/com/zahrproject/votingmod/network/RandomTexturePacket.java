@@ -1,7 +1,9 @@
 package com.zahrproject.votingmod.network;
 
-import com.zahrproject.votingmod.client.RandomTextureHandler;
+import com.zahrproject.votingmod.client.ClientPacketHandlers;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.network.NetworkEvent;
 
 import java.util.function.Supplier;
@@ -27,7 +29,9 @@ public class RandomTexturePacket {
     }
 
     public static void handle(RandomTexturePacket packet, Supplier<NetworkEvent.Context> ctx) {
-        ctx.get().enqueueWork(() -> RandomTextureHandler.setActive(packet.active));
+        ctx.get().enqueueWork(() ->
+                DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () ->
+                        ClientPacketHandlers.handleRandomTexture(packet.active)));
         ctx.get().setPacketHandled(true);
     }
 }

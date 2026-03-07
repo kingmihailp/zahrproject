@@ -1,16 +1,16 @@
 package com.zahrproject.votingmod.network;
 
-import com.zahrproject.votingmod.client.VoteResultOverlay;
+import com.zahrproject.votingmod.client.ClientPacketHandlers;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.network.NetworkEvent;
 
 import java.util.function.Supplier;
 
 /**
  * Server → Client packet.
- * Tells all clients the voting result so {@link VoteResultOverlay} can display it.
- * Includes the option descriptions so the overlay can name the winning event
- * even though the voting screen is already closed.
+ * Tells all clients the voting result so the result overlay can display it.
  */
 public class VoteResultPacket {
 
@@ -48,8 +48,10 @@ public class VoteResultPacket {
 
     public static void handle(VoteResultPacket packet, Supplier<NetworkEvent.Context> ctx) {
         ctx.get().enqueueWork(() ->
-                VoteResultOverlay.show(packet.winnerOption, packet.votesA, packet.votesB,
-                                      packet.optionA, packet.optionB));
+                DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () ->
+                        ClientPacketHandlers.handleVoteResult(
+                                packet.winnerOption, packet.votesA, packet.votesB,
+                                packet.optionA, packet.optionB)));
         ctx.get().setPacketHandled(true);
     }
 }

@@ -1,7 +1,9 @@
 package com.zahrproject.votingmod.network;
 
-import com.zahrproject.votingmod.client.ScreenFlipHandler;
+import com.zahrproject.votingmod.client.ClientPacketHandlers;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.network.NetworkEvent;
 
 import java.util.function.Supplier;
@@ -27,7 +29,9 @@ public class FlipScreenPacket {
     }
 
     public static void handle(FlipScreenPacket packet, Supplier<NetworkEvent.Context> ctx) {
-        ctx.get().enqueueWork(() -> ScreenFlipHandler.setFlipped(packet.flipped));
+        ctx.get().enqueueWork(() ->
+                DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () ->
+                        ClientPacketHandlers.handleFlipScreen(packet.flipped)));
         ctx.get().setPacketHandled(true);
     }
 }
