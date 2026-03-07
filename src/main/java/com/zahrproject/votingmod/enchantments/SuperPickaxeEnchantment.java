@@ -24,5 +24,8 @@ public class SuperPickaxeEnchantment extends Enchantment {
     @Override public boolean isTreasureOnly() { return true; }
 
     @Override
+    public boolean canEnchant(ItemStack stack) { return stack.getItem() instanceof PickaxeItem; }
+
+    @Override
     public boolean canApplyAtEnchantingTable(ItemStack stack) { return false; }
 }

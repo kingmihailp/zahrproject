@@ -28,6 +28,11 @@ public class AntiGravityEnchantment extends Enchantment {
     @Override public boolean isTreasureOnly() { return true; }
 
     @Override
+    public boolean canEnchant(ItemStack stack) {
+        return EnchantmentCategory.ARMOR_FEET.canEnchant(stack.getItem());
+    }
+
+    @Override
     public boolean canApplyAtEnchantingTable(ItemStack stack) { return false; }
 
     /** Compatible with everything — no conflicts. */

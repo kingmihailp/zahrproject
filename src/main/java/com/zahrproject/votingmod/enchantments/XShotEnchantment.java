@@ -32,6 +32,9 @@ public class XShotEnchantment extends Enchantment {
     public boolean isTreasureOnly() { return true; }
 
     @Override
+    public boolean canEnchant(ItemStack stack) { return stack.getItem() == Items.CROSSBOW; }
+
+    @Override
     public boolean canApplyAtEnchantingTable(ItemStack stack) { return false; }
 
     @Override
