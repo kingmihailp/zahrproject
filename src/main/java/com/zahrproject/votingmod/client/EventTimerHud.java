@@ -164,12 +164,12 @@ public class EventTimerHud {
         if (name.contains("сложн"))      return 0xFFDD1122; // Выше, сильнее, слож. → crimson
         if (name.contains("Голова"))     return 0xFFCC55FF; // Голова вниз          → purple
         if (name.contains("хардкор"))    return 0xFF800020; // Истинный хардкор     → dark burgundy
-        if (isMobEffectsEvent(name))     return animatedBRGColor();   // animated blue-red-green
+        if (isMobEffectsEvent(name))  return animatedBRGColor();      // animated blue-red-green
         return 0xFF88FF88;                                 // fallback              → green
     }
 
     private static boolean isMobEffectsEvent(String name) {
-        return name.contains("mob effects");
+        return name.contains("Интеграция с effects");
     }
 
     /**

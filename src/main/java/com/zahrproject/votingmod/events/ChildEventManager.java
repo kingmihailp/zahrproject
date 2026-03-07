@@ -11,7 +11,6 @@ import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.animal.Chicken;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.item.Items;
 import net.minecraftforge.event.entity.EntityEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
@@ -149,7 +148,6 @@ public class ChildEventManager {
 
         Player player = event.getEntity();
         if (!childPlayers.contains(player.getUUID())) return;
-        if (!player.getItemInHand(event.getHand()).is(Items.WHEAT_SEEDS)) return;
         if (chicken.isVehicle()) return;
         if (player.isPassenger()) return;
 

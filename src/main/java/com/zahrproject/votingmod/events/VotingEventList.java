@@ -1223,8 +1223,7 @@ public class VotingEventList {
                             player.drop(book, false);
                         }
                     }
-                    broadcast(server, "Все получили книгу «Супер кирка»! "
-                            + "Зачаруйте кирку — она сломает 20×20 блоков за удар. Ломается через 3 удара!");
+                    broadcast(server, "Все получили книгу «Супер кирка»!");
                 }
         ));
 
@@ -1324,11 +1323,11 @@ public class VotingEventList {
         // ── Интеграция с mob effects — every spawning mob gets a random infinite effect ─
 
         events.add(new VotingEvent(
-                "Интеграция с mob effects",
+                "Интеграция с effects",
                 server -> {
-                    long duration = 3 * 60 * 1000L;
+                    long duration = 8 * 60 * 1000L;
                     MobEffectsHandler.activate(server, duration);
-                    broadcast(server, "Интеграция с mob effects! Каждый новый моб получает случайный бесконечный эффект на 3 минуты.");
+                    broadcast(server, "Интеграция с effects! Каждый новый моб получает случайный бесконечный эффект на 8 минут.");
                 }
         ));
 

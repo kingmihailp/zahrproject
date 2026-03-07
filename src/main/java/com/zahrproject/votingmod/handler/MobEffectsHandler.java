@@ -30,7 +30,7 @@ import java.util.concurrent.TimeUnit;
  */
 public class MobEffectsHandler {
 
-    public static final String TIMER_NAME = "Интеграция с mob effects";
+    public static final String TIMER_NAME = "Интеграция с effects";
 
     private static final Random RANDOM = new Random();
 
