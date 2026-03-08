@@ -55,14 +55,15 @@ public class ScreetchRenderer extends EntityRenderer<ScreetchEntity> {
         // Rotate so the screetch faces its yaw
         poseStack.mulPose(Axis.YP.rotationDegrees(180f - entityYaw));
 
-        // Minecraft ModelPart уже делит все координаты на 16 при запекании (1 пиксель = 1/16 блока).
-        // Внешний scale(1/16) НЕ нужен — он только делал бы двойное деление, уменьшая модель
-        // до 10/256 ≈ 0.04 блока (полная невидимость).
+        // Minecraft ModelPart уже делит все координаты на 16 (1 пиксель = 1/16 блока).
+        // Y-flip (scale Y=-1) нужен потому что модель MC использует соглашение Y+ = вниз
+        // (к ногам), а без флипа Y+ = вверх — модель рендерится перевёрнутой.
         //
-        // Смещаем модель вниз, чтобы тело (pivot Y=18 пикселей = 18/16 = 1.125 блока)
-        // оказалось в центре хитбокса (bbHeight/2 = 0.3 блока).
-        // ty = bbHeight/2 − 18/16 = 0.3 − 1.125 = −0.825
-        poseStack.translate(0.0f, entity.getBbHeight() / 2.0f - 18.0f / 16.0f, 0.0f);
+        // После флипа тело (pivot Y=18 пикселей = 18/16 блока) оказывается на -1.125
+        // от начала координат. Translate +1.425 = bbHeight/2 + 18/16 помещает центр тела
+        // на высоту 0.3 блока (половина хитбокса 0.6).
+        poseStack.scale(1.0f, -1.0f, 1.0f);
+        poseStack.translate(0.0f, -(entity.getBbHeight() / 2.0f + 18.0f / 16.0f), 0.0f);
 
         // Animate the model
         model.setupAnim(entity,
