@@ -16,7 +16,9 @@ import net.minecraftforge.api.distmarker.OnlyIn;
  *
  * Тело body 10×10×10, pivot root Y=18 → центр тела на 0.3 блока выше земли.
  *
- * Глаза 2×2×1 (маленькие), цвет RED в основной текстуре и в eyes-текстуре.
+ * Глаза нарисованы прямо на UV передней грани тела (u=12..14, v=11..13 и
+ * u=16..18, v=11..13). Отдельные кубы не нужны — так гарантируется, что
+ * передняя грань тела == видимая грань глаз.
  *
  * 4 лапки как лучи солнца (каждая — дочерний элемент body):
  *   legLeft  : от левой  грани (-X), уходит влево
@@ -25,9 +27,7 @@ import net.minecraftforge.api.distmarker.OnlyIn;
  *   legBottom: от нижней грани (model +Y = мир −Y), уходит вниз
  *
  * UV (64×64):
- *   body      : texOffs(0,0)   40×20
- *   eyeL      : texOffs(0,32)   6×3  front→ u=1..2, v=33..34
- *   eyeR      : texOffs(8,32)   6×3  front→ u=9..10, v=33..34
+ *   body      : texOffs(0,0)   40×20  (глаза на front face: u=12..14/16..18, v=11..13)
  *   jawCenter : texOffs(0,44)  10×3  front→ u=1..4, v=45..46 (зубы)
  *   jawLeft   : texOffs(11,44)  6×3
  *   jawRight  : texOffs(18,44)  6×3
@@ -40,8 +40,6 @@ import net.minecraftforge.api.distmarker.OnlyIn;
 public class ScreetchModel extends EntityModel<ScreetchEntity> {
 
     private final ModelPart body;
-    private final ModelPart eyeL;
-    private final ModelPart eyeR;
     private final ModelPart jawCenter;
     private final ModelPart jawLeft;
     private final ModelPart jawRight;
@@ -61,13 +59,7 @@ public class ScreetchModel extends EntityModel<ScreetchEntity> {
                 CubeListBuilder.create().texOffs(0, 0).addBox(-5, -5, -5, 10, 10, 10),
                 PartPose.offset(0, 18, 0));
 
-        // ── Глаза 2×2×1, красные, без внешнего масштаба ──────────────────────
-        body.addOrReplaceChild("eyeL",
-                CubeListBuilder.create().texOffs(0, 32).addBox(-3f, -4f, -5.5f, 2, 2, 1),
-                PartPose.ZERO);
-        body.addOrReplaceChild("eyeR",
-                CubeListBuilder.create().texOffs(8, 32).addBox(1f, -4f, -5.5f, 2, 2, 1),
-                PartPose.ZERO);
+        // Глаза нарисованы прямо на UV передней грани тела в texture.
 
         // ── Улыбка ∪ с зубами ────────────────────────────────────────────────
         body.addOrReplaceChild("jawCenter",
@@ -110,8 +102,6 @@ public class ScreetchModel extends EntityModel<ScreetchEntity> {
 
     public ScreetchModel(ModelPart root) {
         this.body      = root.getChild("body");
-        this.eyeL      = body.getChild("eyeL");
-        this.eyeR      = body.getChild("eyeR");
         this.jawCenter = body.getChild("jawCenter");
         this.jawLeft   = body.getChild("jawLeft");
         this.jawRight  = body.getChild("jawRight");
