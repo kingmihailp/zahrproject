@@ -2,12 +2,14 @@ package com.zahrproject.votingmod.handler;
 
 import com.zahrproject.votingmod.network.EventTimerPacket;
 import com.zahrproject.votingmod.network.ModNetwork;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.Mob;
 import net.minecraftforge.event.entity.EntityJoinLevelEvent;
+import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.network.PacketDistributor;
 import net.minecraftforge.registries.ForgeRegistries;
@@ -27,10 +29,15 @@ import java.util.concurrent.TimeUnit;
  *     infinite effect chosen from the full Forge mob-effect registry.
  *   • Active for 3 minutes; after that, new mobs spawn normally while
  *     mobs that already received an effect keep it.
+ *
+ * Timer persists across player reconnects via player NBT.
  */
 public class MobEffectsHandler {
 
     public static final String TIMER_NAME = "Интеграция с effects";
+
+    private static final String NBT_EXPIRY_KEY   = "votingmod_mob_effects_expiry";
+    private static final String NBT_DURATION_KEY = "votingmod_mob_effects_duration";
 
     private static final Random RANDOM = new Random();
 
@@ -54,23 +61,66 @@ public class MobEffectsHandler {
         durationMs = duration;
         expiryMs   = System.currentTimeMillis() + duration;
 
+        for (ServerPlayer p : server.getPlayerList().getPlayers()) {
+            CompoundTag tag = p.getPersistentData();
+            tag.putLong(NBT_EXPIRY_KEY,   expiryMs);
+            tag.putLong(NBT_DURATION_KEY, durationMs);
+        }
+
         EventTimerPacket timerPacket = new EventTimerPacket(TIMER_NAME, duration, duration);
         for (ServerPlayer p : server.getPlayerList().getPlayers())
             ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), timerPacket);
 
-        SCHEDULER.schedule(() -> {
-            MinecraftServer srv = ServerLifecycleHooks.getCurrentServer();
-            if (srv == null) { expiryMs = 0; return; }
-            srv.execute(() -> {
-                expiryMs = 0;
-                for (ServerPlayer p : srv.getPlayerList().getPlayers())
-                    ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p),
-                            new EventTimerPacket(TIMER_NAME, 0, 0));
-            });
-        }, duration, TimeUnit.MILLISECONDS);
+        scheduleRevert(duration);
     }
 
     // ── Forge Events ──────────────────────────────────────────────────────────
+
+    @SubscribeEvent
+    public static void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event) {
+        if (!(event.getEntity() instanceof ServerPlayer player)) return;
+
+        CompoundTag tag = player.getPersistentData();
+        if (!tag.contains(NBT_EXPIRY_KEY)) {
+            ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
+                    new EventTimerPacket(TIMER_NAME, 0, 0));
+            return;
+        }
+
+        long savedExpiry   = tag.getLong(NBT_EXPIRY_KEY);
+        long savedDuration = tag.getLong(NBT_DURATION_KEY);
+        long remaining     = savedExpiry - System.currentTimeMillis();
+
+        if (remaining <= 0) {
+            tag.remove(NBT_EXPIRY_KEY);
+            tag.remove(NBT_DURATION_KEY);
+            ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
+                    new EventTimerPacket(TIMER_NAME, 0, 0));
+            return;
+        }
+
+        if (!isActive()) {
+            expiryMs   = savedExpiry;
+            durationMs = savedDuration;
+            scheduleRevert(remaining);
+        }
+
+        ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
+                new EventTimerPacket(TIMER_NAME, remaining, savedDuration));
+    }
+
+    @SubscribeEvent
+    public static void onPlayerLogout(PlayerEvent.PlayerLoggedOutEvent event) {
+        if (!(event.getEntity() instanceof ServerPlayer player)) return;
+        CompoundTag tag = player.getPersistentData();
+        if (isActive()) {
+            tag.putLong(NBT_EXPIRY_KEY,   expiryMs);
+            tag.putLong(NBT_DURATION_KEY, durationMs);
+        } else {
+            tag.remove(NBT_EXPIRY_KEY);
+            tag.remove(NBT_DURATION_KEY);
+        }
+    }
 
     @SubscribeEvent
     public static void onEntityJoinLevel(EntityJoinLevelEvent event) {
@@ -84,5 +134,24 @@ public class MobEffectsHandler {
         MobEffect chosen = effects.get(RANDOM.nextInt(effects.size()));
         // Integer.MAX_VALUE ticks ≈ infinite; amplifier 0 = level I
         mob.addEffect(new MobEffectInstance(chosen, Integer.MAX_VALUE, 0, false, true));
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private static void scheduleRevert(long delayMs) {
+        SCHEDULER.schedule(() -> {
+            MinecraftServer srv = ServerLifecycleHooks.getCurrentServer();
+            if (srv == null) { expiryMs = 0; return; }
+            srv.execute(() -> {
+                expiryMs = 0;
+                for (ServerPlayer p : srv.getPlayerList().getPlayers()) {
+                    CompoundTag tag = p.getPersistentData();
+                    tag.remove(NBT_EXPIRY_KEY);
+                    tag.remove(NBT_DURATION_KEY);
+                    ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p),
+                            new EventTimerPacket(TIMER_NAME, 0, 0));
+                }
+            });
+        }, delayMs, TimeUnit.MILLISECONDS);
     }
 }
