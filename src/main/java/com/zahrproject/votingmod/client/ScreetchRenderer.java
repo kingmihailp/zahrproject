@@ -55,8 +55,11 @@ public class ScreetchRenderer extends EntityRenderer<ScreetchEntity> {
         // Rotate so the screetch faces its yaw
         poseStack.mulPose(Axis.YP.rotationDegrees(180f - entityYaw));
 
-        // Scale down slightly (model is designed at ~10px = ~0.625 blocks)
+        // Сдвигаем модель вниз, чтобы тело (pivot Y=18) оказалось на правильной высоте.
+        // Без этого тело парит на 1.125 блока над землёй.
+        // ty = bbHeight/2 − 18*scale = 0.3 − 1.125 = −0.825
         float scale = 0.0625f;
+        poseStack.translate(0.0f, entity.getBbHeight() / 2.0f - 18 * scale, 0.0f);
         poseStack.scale(scale, scale, scale);
 
         // Animate the model

@@ -104,12 +104,10 @@ public class ScreetchHandler {
             }
 
             // ── 3. Уровень освещения ─────────────────────────────────────────
+            // Используем только блочный свет — в пещерах небесный свет всегда 0,
+            // а getSkyDarken() может давать неожиданные значения.
             BlockPos pos = player.blockPosition();
-            int blockLight = level.getBrightness(LightLayer.BLOCK, pos);
-            int skyLight   = level.getBrightness(LightLayer.SKY, pos);
-            // Учитываем дневное небесное освещение
-            int effectiveLight = Math.max(blockLight, skyLight - level.getSkyDarken());
-            if (effectiveLight > 7) {
+            if (level.getBrightness(LightLayer.BLOCK, pos) > 7) {
                 spawnCooldown.put(uuid, 40); // проверяем снова через 2 секунды
                 continue;
             }
