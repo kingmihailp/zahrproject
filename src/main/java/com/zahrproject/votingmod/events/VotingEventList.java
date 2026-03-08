@@ -1355,35 +1355,7 @@ public class VotingEventList {
 
         events.add(new VotingEvent(
                 "они такая мелочь",
-                server -> {
-                    long durationMs = 10 * 60 * 1000L;
-
-                    ScreetchHandler.activate(server);
-
-                    EventTimerPacket timerPkt = new EventTimerPacket(
-                            "они такая мелочь", durationMs, durationMs);
-                    for (ServerPlayer p : server.getPlayerList().getPlayers())
-                        ModNetwork.CHANNEL.send(
-                                net.minecraftforge.network.PacketDistributor.PLAYER.with(() -> p),
-                                timerPkt);
-
-                    // Schedule deactivation after 10 minutes
-                    java.util.concurrent.Executors
-                            .newSingleThreadScheduledExecutor(r -> {
-                                Thread t = new Thread(r, "VotingMod-ScreetchEnd");
-                                t.setDaemon(true);
-                                return t;
-                            })
-                            .schedule(() -> {
-                                ScreetchHandler.deactivate();
-                                EventTimerPacket timerEnd = new EventTimerPacket(
-                                        "они такая мелочь", -1, durationMs);
-                                for (ServerPlayer p : server.getPlayerList().getPlayers())
-                                    ModNetwork.CHANNEL.send(
-                                            net.minecraftforge.network.PacketDistributor.PLAYER.with(() -> p),
-                                            timerEnd);
-                            }, 10, java.util.concurrent.TimeUnit.MINUTES);
-                }
+                server -> ScreetchHandler.activate(server, 10 * 60 * 1000L)
         ));
 
         return events;
