@@ -62,7 +62,7 @@ public class ScreetchRenderer extends EntityRenderer<ScreetchEntity> {
         // После флипа тело (pivot Y=18 пикселей = 18/16 блока) оказывается на -1.125
         // от начала координат. Translate +1.425 = bbHeight/2 + 18/16 помещает центр тела
         // на высоту 0.3 блока (половина хитбокса 0.6).
-        poseStack.scale(1.0f, -1.0f, 1.0f);
+        poseStack.scale(-1.0f, -1.0f, 1.0f);
         poseStack.translate(0.0f, -(entity.getBbHeight() / 2.0f + 18.0f / 16.0f), 0.0f);
 
         // Animate the model
