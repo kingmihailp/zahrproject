@@ -623,7 +623,16 @@ public class VotingEventList {
                         double oz = (RANDOM.nextDouble() - 0.5) * 4;
                         Entity boat = boatType.create(level);
                         if (boat == null) continue;
-                        if (boat instanceof Boat b) b.setBoatType(woodType);
+                        // Ищем setter по типу параметра — устойчиво к переименованиям маппингов
+                        if (boat instanceof Boat) {
+                            for (java.lang.reflect.Method m : boat.getClass().getMethods()) {
+                                if (m.getParameterCount() == 1
+                                        && m.getParameterTypes()[0] == Boat.Type.class) {
+                                    try { m.invoke(boat, woodType); } catch (Exception ignored) {}
+                                    break;
+                                }
+                            }
+                        }
                         boat.moveTo(pos.getX() + ox, pos.getY(), pos.getZ() + oz, 0, 0);
                         level.addFreshEntity(boat);
                     }
