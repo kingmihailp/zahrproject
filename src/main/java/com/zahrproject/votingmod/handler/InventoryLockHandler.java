@@ -9,7 +9,10 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraftforge.event.entity.item.ItemTossEvent;
 import net.minecraftforge.event.entity.player.EntityItemPickupEvent;
+import net.minecraftforge.event.entity.player.PlayerContainerEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.network.PacketDistributor;
@@ -22,14 +25,17 @@ import java.util.concurrent.TimeUnit;
 /**
  * Manages the "Нехватка места" event:
  *
- *   ALL items from the main inventory (hotbar slots 0-8 + main slots 9-35,
- *   i.e. the full 36-slot {@code items} list) are removed and stored safely
- *   in the player's persistent NBT data.  Armor (36-39) and offhand (40)
- *   slots are left untouched.
+ *   ALL items from the main inventory (main slots 9-35) are dropped.
+ *   Those slots are then filled with special barrier items that cannot
+ *   be removed or moved — effectively locking the inventory grid.
+ *   The hotbar (slots 0-8) remains usable.
  *
- *   After the timer the hidden items are restored to their original slots.
- *   If a slot was re-occupied, overflow items go to the first free slot or
- *   are dropped at the player's feet.
+ *   While active, opening any external container (chest, workbench, etc.)
+ *   is immediately cancelled to prevent slot-swap exploits.
+ *
+ *   After the timer the barrier items are cleared and the original items
+ *   (which were dropped at activation) are NOT auto-restored, since they
+ *   were physically dropped into the world.
  *
  *   Items survive server restarts and player reconnects via NBT storage.
  */
@@ -37,9 +43,13 @@ public class InventoryLockHandler {
 
     public static final String TIMER_NAME = "Нехватка места";
 
-    private static final String NBT_HIDDEN   = "votingmod_invlock_hidden";
+    /** NBT tag placed on each barrier ItemStack to identify it as ours. */
+    private static final String NBT_BARRIER_TAG = "votingmod_locked_slot";
+
     private static final String NBT_EXPIRY   = "votingmod_invlock_expiry";
     private static final String NBT_DURATION = "votingmod_invlock_duration";
+    /** NBT key saved on the player to know barrier slots were applied. */
+    private static final String NBT_BARRIERS_APPLIED = "votingmod_invlock_barriers";
 
     private static final ScheduledExecutorService SCHEDULER =
             Executors.newSingleThreadScheduledExecutor(r -> {
@@ -62,7 +72,7 @@ public class InventoryLockHandler {
         expiryMs   = System.currentTimeMillis() + duration;
 
         for (ServerPlayer p : server.getPlayerList().getPlayers()) {
-            hideNonHotbarItems(p);
+            dropAndLockInventory(p);
             p.getPersistentData().putLong(NBT_EXPIRY,   expiryMs);
             p.getPersistentData().putLong(NBT_DURATION, durationMs);
         }
@@ -77,10 +87,7 @@ public class InventoryLockHandler {
     // ── Forge Events ──────────────────────────────────────────────────────────
 
     /**
-     * While the event is active, only allow pickup if the item fits in the
-     * hotbar (slots 0-8).  Vanilla places items from slot 0 upward, so
-     * allowing the event here is sufficient — items will land in the hotbar.
-     * Cancel once all 9 hotbar slots are full and no stack can be merged.
+     * Cancel pickup of any ground item if there is no free non-barrier hotbar slot.
      */
     @SubscribeEvent
     public static void onItemPickup(EntityItemPickupEvent event) {
@@ -91,11 +98,35 @@ public class InventoryLockHandler {
         Inventory inv = player.getInventory();
         for (int i = 0; i < 9; i++) {
             ItemStack slot = inv.getItem(i);
-            if (slot.isEmpty()) return;                          // free hotbar slot
+            if (slot.isEmpty()) return;
             if (ItemStack.isSameItemSameTags(slot, incoming)
-                    && slot.getCount() < slot.getMaxStackSize()) return; // stackable
+                    && slot.getCount() < slot.getMaxStackSize()) return;
         }
-        event.setCanceled(true); // hotbar full, no merge possible
+        event.setCanceled(true);
+    }
+
+    /**
+     * Prevent players from throwing barrier items onto the ground.
+     */
+    @SubscribeEvent
+    public static void onItemToss(ItemTossEvent event) {
+        if (!isActive()) return;
+        if (isLockedBarrier(event.getEntity().getItem())) {
+            event.setCanceled(true);
+        }
+    }
+
+    /**
+     * Close any external container (chest, workbench…) immediately when opened
+     * to prevent players from swapping barrier items with container contents.
+     */
+    @SubscribeEvent
+    public static void onContainerOpen(PlayerContainerEvent.Open event) {
+        if (!isActive()) return;
+        if (!(event.getEntity() instanceof ServerPlayer player)) return;
+        // Schedule close on the next server tick to avoid Forge callback issues.
+        MinecraftServer server = player.getServer();
+        if (server != null) server.execute(player::closeContainer);
     }
 
     @SubscribeEvent
@@ -112,15 +143,23 @@ public class InventoryLockHandler {
         long remaining     = savedExpiry - System.currentTimeMillis();
 
         if (remaining <= 0) {
-            // Event expired while this player was offline — give items back now.
-            restoreItems(player);
-            expiryMs = 0;
+            // Event expired while offline — clear any leftover barriers.
+            clearBarriers(player);
+            tag.remove(NBT_EXPIRY);
+            tag.remove(NBT_DURATION);
+            tag.remove(NBT_BARRIERS_APPLIED);
             ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
                     new EventTimerPacket(TIMER_NAME, 0, 0));
             return;
         }
 
-        // Restore global timer state after a server restart.
+        // Re-apply barriers if they weren't already set (e.g. server restart).
+        if (tag.getBoolean(NBT_BARRIERS_APPLIED)) {
+            // Barriers already in place from before — just restore global timer.
+        } else {
+            dropAndLockInventory(player);
+        }
+
         if (!isActive()) {
             expiryMs   = savedExpiry;
             durationMs = savedDuration;
@@ -135,7 +174,6 @@ public class InventoryLockHandler {
     public static void onPlayerLogout(PlayerEvent.PlayerLoggedOutEvent event) {
         if (!(event.getEntity() instanceof ServerPlayer player)) return;
         if (isActive()) {
-            // Refresh the expiry stamp so items are restored correctly on next login.
             player.getPersistentData().putLong(NBT_EXPIRY,   expiryMs);
             player.getPersistentData().putLong(NBT_DURATION, durationMs);
         }
@@ -143,53 +181,43 @@ public class InventoryLockHandler {
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    /**
-     * Move all items from the main inventory (hotbar 0-8 + main 9-35) into
-     * the player's persistent NBT, leaving those slots empty.
-     * Armor and offhand slots are not touched.
-     */
-    private static void hideNonHotbarItems(ServerPlayer player) {
+    /** Drop all items from main slots 9-35 and fill them with locked barriers. */
+    private static void dropAndLockInventory(ServerPlayer player) {
         Inventory inv = player.getInventory();
-        for (int i = 9; i < inv.items.size(); i++) {
+        for (int i = 9; i < 36; i++) {
             ItemStack stack = inv.getItem(i);
-            if (stack.isEmpty()) continue;
-            player.drop(stack, false);
-            inv.setItem(i, ItemStack.EMPTY);
+            if (!stack.isEmpty() && !isLockedBarrier(stack)) {
+                player.drop(stack, false);
+            }
+            inv.setItem(i, makeBarrier());
         }
+        player.getPersistentData().putBoolean(NBT_BARRIERS_APPLIED, true);
         player.inventoryMenu.broadcastChanges();
     }
 
-    /**
-     * Return all hidden items to their original slots, handling conflicts by
-     * overflowing to spare inventory space or dropping at the player's feet.
-     * Clears all event NBT keys afterwards.
-     */
-    private static void restoreItems(ServerPlayer player) {
-        CompoundTag tag = player.getPersistentData();
-        if (!tag.contains(NBT_HIDDEN)) return;
-
-        ListTag  hidden = tag.getList(NBT_HIDDEN, Tag.TAG_COMPOUND);
-        Inventory inv   = player.getInventory();
-
-        for (int i = 0; i < hidden.size(); i++) {
-            CompoundTag entry = hidden.getCompound(i);
-            int       slot  = entry.getInt("Slot");
-            ItemStack stack = ItemStack.of(entry);
-
-            if (inv.getItem(slot).isEmpty()) {
-                inv.setItem(slot, stack);
-            } else {
-                // Slot now occupied — try to merge/add, otherwise drop.
-                if (!inv.add(stack)) {
-                    player.drop(stack, false);
-                }
+    /** Remove all locked barriers from main slots 9-35. */
+    private static void clearBarriers(ServerPlayer player) {
+        Inventory inv = player.getInventory();
+        for (int i = 9; i < 36; i++) {
+            if (isLockedBarrier(inv.getItem(i))) {
+                inv.setItem(i, ItemStack.EMPTY);
             }
         }
-
-        tag.remove(NBT_HIDDEN);
-        tag.remove(NBT_EXPIRY);
-        tag.remove(NBT_DURATION);
+        player.getPersistentData().remove(NBT_BARRIERS_APPLIED);
         player.inventoryMenu.broadcastChanges();
+    }
+
+    private static ItemStack makeBarrier() {
+        ItemStack stack = new ItemStack(Items.BARRIER);
+        stack.getOrCreateTag().putByte(NBT_BARRIER_TAG, (byte) 1);
+        return stack;
+    }
+
+    private static boolean isLockedBarrier(ItemStack stack) {
+        return !stack.isEmpty()
+                && stack.getItem() == Items.BARRIER
+                && stack.hasTag()
+                && stack.getTag().contains(NBT_BARRIER_TAG);
     }
 
     private static void scheduleRevert(long delayMs) {
@@ -199,7 +227,9 @@ public class InventoryLockHandler {
             if (srv == null) return;
             srv.execute(() -> {
                 for (ServerPlayer p : srv.getPlayerList().getPlayers()) {
-                    restoreItems(p);
+                    clearBarriers(p);
+                    p.getPersistentData().remove(NBT_EXPIRY);
+                    p.getPersistentData().remove(NBT_DURATION);
                     ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p),
                             new EventTimerPacket(TIMER_NAME, 0, 0));
                 }

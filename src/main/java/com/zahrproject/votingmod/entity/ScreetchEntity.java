@@ -94,6 +94,20 @@ public class ScreetchEntity extends Entity {
         // Слишком далеко (> 16 блоков) — тихий деспавн
         if (player.distanceTo(this) > 16.0) { this.discard(); return; }
 
+        // Держим дистанцию ≥ 2 блоков от игрока ──────────────────────────────
+        double dx = this.getX() - player.getX();
+        double dz = this.getZ() - player.getZ();
+        double horizDist = Math.sqrt(dx * dx + dz * dz);
+        if (horizDist < 2.0) {
+            if (horizDist < 0.01) {
+                // Прямо на игроке — отступаем назад от взгляда игрока
+                Vec3 look = player.getLookAngle();
+                dx = -look.x; dz = -look.z;
+            }
+            double factor = 2.0 / Math.sqrt(dx * dx + dz * dz);
+            this.setPos(player.getX() + dx * factor, player.getY(), player.getZ() + dz * factor);
+        }
+
         // Проверяем угол взгляда ───────────────────────────────────────────────
         Vec3 lookDir    = player.getLookAngle();
         Vec3 toScreetch = this.position().subtract(player.getEyePosition()).normalize();

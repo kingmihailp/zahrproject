@@ -45,6 +45,7 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LightningBolt;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.vehicle.Boat;
 import net.minecraft.world.entity.MobCategory;
 import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.entity.animal.Rabbit;
@@ -605,19 +606,14 @@ public class VotingEventList {
         events.add(new VotingEvent(
                 "Призвать случайную лодку рядом с каждым игроком",
                 server -> {
-                    // Собираем все типы лодок и плотов из реестра по суффиксу имени
-                    List<EntityType<?>> boatTypes = new ArrayList<>();
-                    for (EntityType<?> type : BuiltInRegistries.ENTITY_TYPE) {
-                        ResourceLocation key = BuiltInRegistries.ENTITY_TYPE.getKey(type);
-                        if (key == null) continue;
-                        String path = key.getPath();
-                        if (path.endsWith("_boat") || path.endsWith("_raft")) {
-                            boatTypes.add(type);
-                        }
-                    }
-                    if (boatTypes.isEmpty()) return;
+                    // Случайный вид лодки: обычная или с сундуком
+                    EntityType<?>[] boatEntityTypes = { EntityType.BOAT, EntityType.CHEST_BOAT };
+                    EntityType<?> boatType = boatEntityTypes[RANDOM.nextInt(boatEntityTypes.length)];
 
-                    EntityType<?> boatType = boatTypes.get(RANDOM.nextInt(boatTypes.size()));
+                    // Случайный тип дерева
+                    Boat.Type[] woodTypes = Boat.Type.values();
+                    Boat.Type woodType = woodTypes[RANDOM.nextInt(woodTypes.length)];
+
                     String boatName = boatType.getDescription().getString();
 
                     for (ServerPlayer player : server.getPlayerList().getPlayers()) {
@@ -627,6 +623,7 @@ public class VotingEventList {
                         double oz = (RANDOM.nextDouble() - 0.5) * 4;
                         Entity boat = boatType.create(level);
                         if (boat == null) continue;
+                        if (boat instanceof Boat b) b.setType(woodType);
                         boat.moveTo(pos.getX() + ox, pos.getY(), pos.getZ() + oz, 0, 0);
                         level.addFreshEntity(boat);
                     }

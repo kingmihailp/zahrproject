@@ -12,7 +12,6 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
@@ -212,8 +211,10 @@ public class ScreetchHandler {
             }
 
             // ── 3. Уровень освещения ─────────────────────────────────────────
+            // Используем суммарный свет (блоковый + небесный) для корректной
+            // работы как в подземелье, так и на поверхности днём.
             BlockPos pos = player.blockPosition();
-            if (level.getBrightness(LightLayer.BLOCK, pos) > 7) {
+            if (level.getMaxLocalRawBrightness(pos) > 7) {
                 spawnCooldown.put(uuid, 40); // проверяем снова через 2 секунды
                 continue;
             }
