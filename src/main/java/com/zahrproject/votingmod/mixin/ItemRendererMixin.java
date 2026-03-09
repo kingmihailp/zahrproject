@@ -1,10 +1,10 @@
 package com.zahrproject.votingmod.mixin;
 
+import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
+import com.mojang.blaze3d.vertex.VertexMultiConsumer;
 import com.zahrproject.votingmod.client.LimeGlintHelper;
 import com.zahrproject.votingmod.enchantments.ModEnchantments;
-import com.mojang.blaze3d.vertex.VertexMultiConsumer;
-import net.minecraft.client.renderer.ItemRenderer;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.resources.model.BakedModel;
@@ -14,6 +14,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
@@ -23,23 +24,36 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * Replaces the standard enchantment glint with a lime-green glint when
  * the rendered item carries the Terra Blade enchantment.
  *
- * Strategy:
- *   1. @Inject at HEAD of ItemRenderer.render – set a ThreadLocal flag when
- *      the current stack has Terra Blade.
- *   2. @Inject at RETURN of ItemRenderer.render – clear the flag.
- *   3. @Redirect both getFoilBufferDirect and getFoilBuffer calls inside
- *      render – when the flag is active and isGlint is true, return a
- *      VertexMultiConsumer that writes to our lime RenderType instead of
- *      the vanilla purple/gold ones.
+ * Uses targets = "..." instead of ItemRenderer.class to avoid compile-time
+ * dependency on the client-only class inside the annotation processor.
  */
-@Mixin(ItemRenderer.class)
+@Mixin(targets = "net.minecraft.client.renderer.ItemRenderer")
 public class ItemRendererMixin {
 
-    // Thread-local so it's safe if multiple threads somehow render items
+    // Shadow the two static foil-buffer helpers so we can call them without
+    // a direct compile-time reference to ItemRenderer.
+    @Shadow
+    private static VertexConsumer getFoilBufferDirect(MultiBufferSource bufferSource,
+                                                       RenderType renderType,
+                                                       boolean isItem,
+                                                       boolean isGlint) {
+        throw new AssertionError("@Shadow");
+    }
+
+    @Shadow
+    private static VertexConsumer getFoilBuffer(MultiBufferSource bufferSource,
+                                                 RenderType renderType,
+                                                 boolean isItem,
+                                                 boolean isGlint) {
+        throw new AssertionError("@Shadow");
+    }
+
+    // ── Thread-local flag ─────────────────────────────────────────────────────
+
     private static final ThreadLocal<Boolean> TERRA_BLADE_ACTIVE =
             ThreadLocal.withInitial(() -> false);
 
-    // ── Inject: detect Terra Blade at render start ────────────────────────────
+    // ── Inject: detect Terra Blade at render start / end ─────────────────────
 
     @Inject(
         method = "render(Lnet/minecraft/world/item/ItemStack;" +
@@ -51,7 +65,7 @@ public class ItemRendererMixin {
     private void onRenderHead(ItemStack stack,
                                ItemDisplayContext displayContext,
                                boolean leftHand,
-                               com.mojang.blaze3d.vertex.PoseStack poseStack,
+                               PoseStack poseStack,
                                MultiBufferSource bufferSource,
                                int combinedLight,
                                int combinedOverlay,
@@ -70,7 +84,7 @@ public class ItemRendererMixin {
     private void onRenderReturn(ItemStack stack,
                                  ItemDisplayContext displayContext,
                                  boolean leftHand,
-                                 com.mojang.blaze3d.vertex.PoseStack poseStack,
+                                 PoseStack poseStack,
                                  MultiBufferSource bufferSource,
                                  int combinedLight,
                                  int combinedOverlay,
@@ -102,7 +116,7 @@ public class ItemRendererMixin {
                     bufferSource.getBuffer(LimeGlintHelper.LIME_GLINT_DIRECT),
                     bufferSource.getBuffer(renderType));
         }
-        return ItemRenderer.getFoilBufferDirect(bufferSource, renderType, isItem, isGlint);
+        return getFoilBufferDirect(bufferSource, renderType, isItem, isGlint);
     }
 
     // ── Redirect: getFoilBuffer (3-D world items) ─────────────────────────────
@@ -128,17 +142,15 @@ public class ItemRendererMixin {
                     bufferSource.getBuffer(LimeGlintHelper.LIME_GLINT_TRANSLUCENT),
                     bufferSource.getBuffer(renderType));
         }
-        return ItemRenderer.getFoilBuffer(bufferSource, renderType, isItem, isGlint);
+        return getFoilBuffer(bufferSource, renderType, isItem, isGlint);
     }
 
     // ── Helper ────────────────────────────────────────────────────────────────
 
     private static boolean hasTerraBladeEnchantment(ItemStack stack) {
         if (stack.isEmpty() || !stack.hasFoil()) return false;
-        // Weapon with the enchantment directly applied
         if (EnchantmentHelper.getTagEnchantmentLevel(ModEnchantments.TERRA_BLADE.get(), stack) > 0)
             return true;
-        // Enchanted book carrying Terra Blade as a stored enchantment
         if (stack.is(Items.ENCHANTED_BOOK)) {
             return EnchantmentHelper.deserializeEnchantments(EnchantedBookItem.getEnchantments(stack))
                     .containsKey(ModEnchantments.TERRA_BLADE.get());
