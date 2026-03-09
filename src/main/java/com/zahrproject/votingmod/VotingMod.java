@@ -37,6 +37,7 @@ import com.zahrproject.votingmod.handler.MeteorRainHandler;
 import com.zahrproject.votingmod.handler.SkateboardHandler;
 import com.zahrproject.votingmod.handler.SuperPickaxeHandler;
 import com.zahrproject.votingmod.handler.MShotHandler;
+import com.zahrproject.votingmod.handler.AquamanHandler;
 import com.zahrproject.votingmod.handler.ScreetchHandler;
 import com.zahrproject.votingmod.handler.XShotHandler;
 import com.zahrproject.votingmod.network.ModNetwork;
@@ -91,6 +92,7 @@ public class VotingMod {
         MinecraftForge.EVENT_BUS.register(MobEffectsHandler.class);
         MinecraftForge.EVENT_BUS.register(AntiGravityHandler.class);
         MinecraftForge.EVENT_BUS.register(ScreetchHandler.class);
+        MinecraftForge.EVENT_BUS.register(AquamanHandler.class);
         LOGGER.info("[VotingMod] Mod initialized!");
     }
 

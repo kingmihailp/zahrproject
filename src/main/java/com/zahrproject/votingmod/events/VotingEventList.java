@@ -7,6 +7,7 @@ import com.zahrproject.votingmod.handler.InvertColorsTracker;
 import com.zahrproject.votingmod.handler.RandomTextureTracker;
 import com.zahrproject.votingmod.handler.BloodMoonHandler;
 import com.zahrproject.votingmod.handler.MobEffectsHandler;
+import com.zahrproject.votingmod.handler.AquamanHandler;
 import com.zahrproject.votingmod.handler.ScreetchHandler;
 import com.zahrproject.votingmod.network.InvertColorsPacket;
 import com.zahrproject.votingmod.network.RandomTexturePacket;
@@ -1362,6 +1363,28 @@ public class VotingEventList {
         events.add(new VotingEvent(
                 "они такая мелочь",
                 server -> ScreetchHandler.activate(server, 10 * 60 * 1000L)
+        ));
+
+        // ── Special: aquaman — breathe underwater, suffocate on surface ────────
+
+        events.add(new VotingEvent(
+                "аквамен",
+                server -> {
+                    long duration = 3 * 60 * 1000L;
+                    AquamanHandler.activate(server, duration);
+                    broadcast(server, "аквамен! Игроки дышат под водой, но задыхаются на поверхности 3 минуты!");
+                }
+        ));
+
+        // ── Special: random randomTickSpeed ───────────────────────────────────
+
+        events.add(new VotingEvent(
+                "Случайный randomTickSpeed",
+                server -> {
+                    int value = 10 + RANDOM.nextInt(791); // 10..800
+                    server.getGameRules().getRule(GameRules.RULE_RANDOMTICKING).set(value, server);
+                    broadcast(server, "randomTickSpeed установлен на " + value + "!");
+                }
         ));
 
         return events;
