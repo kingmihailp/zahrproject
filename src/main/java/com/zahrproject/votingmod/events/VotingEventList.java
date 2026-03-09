@@ -623,7 +623,7 @@ public class VotingEventList {
                         double oz = (RANDOM.nextDouble() - 0.5) * 4;
                         Entity boat = boatType.create(level);
                         if (boat == null) continue;
-                        if (boat instanceof Boat b) b.setType(woodType);
+                        if (boat instanceof Boat b) b.setBoatType(woodType);
                         boat.moveTo(pos.getX() + ox, pos.getY(), pos.getZ() + oz, 0, 0);
                         level.addFreshEntity(boat);
                     }
