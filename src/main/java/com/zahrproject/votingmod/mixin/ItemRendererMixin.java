@@ -154,7 +154,7 @@ public class ItemRendererMixin {
 
     private static boolean hasTerraBladeEnchantment(ItemStack stack) {
         if (stack.isEmpty() || !stack.hasFoil()) return false;
-        if (EnchantmentHelper.getTagEnchantmentLevel(ModEnchantments.TERRA_BLADE.get(), stack) > 0)
+        if (EnchantmentHelper.getItemEnchantmentLevel(ModEnchantments.TERRA_BLADE.get(), stack) > 0)
             return true;
         if (stack.is(Items.ENCHANTED_BOOK)) {
             return EnchantmentHelper.deserializeEnchantments(EnchantedBookItem.getEnchantments(stack))
