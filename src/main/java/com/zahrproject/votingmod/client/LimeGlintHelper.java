@@ -9,6 +9,8 @@ import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.FastColor;
 
+import java.lang.reflect.Method;
+
 /**
  * Provides lime-coloured enchantment glint render types for the Terra Blade.
  *
@@ -23,13 +25,26 @@ public final class LimeGlintHelper extends RenderStateShard {
         super("lime_glint_helper", () -> {}, () -> {});
     }
 
+    private static RenderType create(String name, VertexFormat format, VertexFormat.Mode mode,
+                                     int bufferSize, RenderType.CompositeState state) {
+        try {
+            Method m = RenderType.class.getDeclaredMethod("create",
+                    String.class, VertexFormat.class, VertexFormat.Mode.class,
+                    int.class, RenderType.CompositeState.class);
+            m.setAccessible(true);
+            return (RenderType) m.invoke(null, name, format, mode, bufferSize, state);
+        } catch (ReflectiveOperationException e) {
+            throw new RuntimeException("Failed to invoke RenderType.create", e);
+        }
+    }
+
     public static final ResourceLocation LIME_GLINT_TEXTURE =
             new ResourceLocation("votingmod", "textures/misc/lime_glint.png");
 
     /**
      * Replacement for {@link RenderType#glintDirect()} — used in GUI / flat lighting.
      */
-    public static final RenderType LIME_GLINT_DIRECT = RenderType.create(
+    public static final RenderType LIME_GLINT_DIRECT = create(
             "votingmod:lime_glint_direct",
             DefaultVertexFormat.POSITION_TEX,
             VertexFormat.Mode.QUADS,
@@ -46,7 +61,7 @@ public final class LimeGlintHelper extends RenderStateShard {
     /**
      * Replacement for {@link RenderType#glintTranslucent()} — used in 3-D world rendering.
      */
-    public static final RenderType LIME_GLINT_TRANSLUCENT = RenderType.create(
+    public static final RenderType LIME_GLINT_TRANSLUCENT = create(
             "votingmod:lime_glint_translucent",
             DefaultVertexFormat.POSITION_TEX,
             VertexFormat.Mode.QUADS,
