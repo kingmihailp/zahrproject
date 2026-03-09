@@ -35,7 +35,9 @@ public abstract class BladeEnchantment extends Enchantment {
     @Override
     public boolean canApplyAtEnchantingTable(ItemStack stack) { return false; }
 
-    /** Compatible with everything — no conflicts. */
+    /** Blade enchantments do not stack with each other, but are compatible with everything else. */
     @Override
-    protected boolean checkCompatibility(Enchantment other) { return true; }
+    protected boolean checkCompatibility(Enchantment other) {
+        return !(other instanceof BladeEnchantment);
+    }
 }

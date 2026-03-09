@@ -7,5 +7,10 @@
   "enchantment.votingmod.xshot": "X-Shot",
   "enchantment.votingmod.super_pickaxe": "Super Pickaxe",
   "enchantment.votingmod.mshot": "M-Shot",
-  "enchantment.votingmod.anti_gravity": "Anti-Gravity"
+  "enchantment.votingmod.anti_gravity": "Anti-Gravity",
+  "enchantment.votingmod.water_blade": "Water Blade",
+  "enchantment.votingmod.fire_blade": "Fire Blade",
+  "enchantment.votingmod.earth_blade": "Earth Blade",
+  "enchantment.votingmod.wind_blade": "Wind Blade"
 }
+

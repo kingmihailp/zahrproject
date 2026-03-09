@@ -7,5 +7,10 @@
   "enchantment.votingmod.xshot": "X-выстрел",
   "enchantment.votingmod.super_pickaxe": "Супер кирка",
   "enchantment.votingmod.mshot": "M-выстрел",
-  "enchantment.votingmod.anti_gravity": "Антигравитация"
+  "enchantment.votingmod.anti_gravity": "Антигравитация",
+  "enchantment.votingmod.water_blade": "Лезвие воды",
+  "enchantment.votingmod.fire_blade": "Лезвие огня",
+  "enchantment.votingmod.earth_blade": "Лезвие земли",
+  "enchantment.votingmod.wind_blade": "Лезвие ветра"
 }
+
