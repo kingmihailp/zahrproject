@@ -13,7 +13,7 @@ import org.spongepowered.asm.mixin.gen.Invoker;
 @Mixin(RenderType.class)
 public interface RenderTypeAccessor {
 
-    @Invoker("create")
+    @Invoker(value = "create", remap = false)
     static RenderType invokeCreate(String name,
                                    VertexFormat format,
                                    VertexFormat.Mode mode,
