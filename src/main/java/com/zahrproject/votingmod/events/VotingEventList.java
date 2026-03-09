@@ -1420,6 +1420,19 @@ public class VotingEventList {
                 }
         ));
 
+        events.add(new VotingEvent(
+                "Выдать всем игрокам зачарованную книгу «Терра-лезвие»",
+                server -> {
+                    for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                        ItemStack book = new ItemStack(Items.ENCHANTED_BOOK);
+                        EnchantedBookItem.addEnchantment(book,
+                                new EnchantmentInstance(ModEnchantments.TERRA_BLADE.get(), 1));
+                        if (!player.getInventory().add(book)) player.drop(book, false);
+                    }
+                    broadcast(server, "Все получили книгу «Терра-лезвие»! Двойной урон + волна частиц при атаке!");
+                }
+        ));
+
         // ── Special: aquaman — breathe underwater, suffocate on surface ────────
 
         events.add(new VotingEvent(

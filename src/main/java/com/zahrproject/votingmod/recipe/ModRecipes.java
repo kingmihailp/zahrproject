@@ -15,4 +15,8 @@ public class ModRecipes {
     public static final RegistryObject<SimpleCraftingRecipeSerializer<MShotBookRecipe>> MSHOT_BOOK_SERIALIZER =
             RECIPE_SERIALIZERS.register("mshot_book",
                     () -> new SimpleCraftingRecipeSerializer<>(MShotBookRecipe::new));
+
+    public static final RegistryObject<SimpleCraftingRecipeSerializer<TerraBladeBookRecipe>> TERRA_BLADE_BOOK_SERIALIZER =
+            RECIPE_SERIALIZERS.register("terra_blade_book",
+                    () -> new SimpleCraftingRecipeSerializer<>(TerraBladeBookRecipe::new));
 }

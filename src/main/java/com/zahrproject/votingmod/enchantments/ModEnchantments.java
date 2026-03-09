@@ -37,4 +37,7 @@ public class ModEnchantments {
 
     public static final RegistryObject<Enchantment> WIND_BLADE =
             ENCHANTMENTS.register("wind_blade", WindBladeEnchantment::new);
+
+    public static final RegistryObject<Enchantment> TERRA_BLADE =
+            ENCHANTMENTS.register("terra_blade", TerraBladeEnchantment::new);
 }
