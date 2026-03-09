@@ -6,8 +6,7 @@
   "refmap": "votingmod.refmap.json",
   "mixins": [],
   "client": [
-    "ItemRendererMixin",
-    "RenderTypeAccessor"
+    "ItemRendererMixin"
   ],
   "injectors": {
     "defaultRequire": 1
