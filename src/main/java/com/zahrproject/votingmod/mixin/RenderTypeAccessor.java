@@ -14,11 +14,11 @@ import org.spongepowered.asm.mixin.gen.Invoker;
 public interface RenderTypeAccessor {
 
     @Invoker(value = "create", remap = false)
-    static RenderType invokeCreate(String name,
-                                   VertexFormat format,
-                                   VertexFormat.Mode mode,
-                                   int bufferSize,
-                                   RenderType.CompositeState state) {
+    static RenderType.CompositeRenderType invokeCreate(String name,
+                                                       VertexFormat format,
+                                                       VertexFormat.Mode mode,
+                                                       int bufferSize,
+                                                       RenderType.CompositeState state) {
         throw new AssertionError("Mixin @Invoker not applied");
     }
 }
