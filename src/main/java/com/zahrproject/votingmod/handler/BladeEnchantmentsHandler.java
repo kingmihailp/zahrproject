@@ -1,6 +1,7 @@
 package com.zahrproject.votingmod.handler;
 
 import com.zahrproject.votingmod.enchantments.ModEnchantments;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.BlockParticleOption;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.server.level.ServerLevel;
@@ -13,6 +14,7 @@ import net.minecraft.world.entity.item.FallingBlockEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.event.entity.living.LivingHurtEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -134,19 +136,26 @@ public class BladeEnchantmentsHandler {
                 cx, cy + 0.5, cz, 15, 1.5, 0.5, 1.5, 0.15);
         level.sendParticles(ParticleTypes.EXPLOSION, cx, cy + 0.5, cz, 3, 1.0, 0.3, 1.0, 0.0);
 
-        // Throw 4 gravel blocks upward as physical projectiles
-        for (int i = 0; i < 4; i++) {
-            double ox = (RANDOM.nextDouble() - 0.5) * 3;
-            double oz = (RANDOM.nextDouble() - 0.5) * 3;
-            FallingBlockEntity fbe = new FallingBlockEntity(
-                    level, cx + ox, cy + 0.5, cz + oz,
-                    Blocks.GRAVEL.defaultBlockState());
-            fbe.setDeltaMovement(
-                    (RANDOM.nextDouble() - 0.5) * 0.4,
-                    1.5 + RANDOM.nextDouble() * 0.5,
-                    (RANDOM.nextDouble() - 0.5) * 0.4);
-            fbe.dropItem = false;
-            level.addFreshEntity(fbe);
+        // Throw up to 4 real ground blocks upward using FallingBlockEntity.fall()
+        BlockPos center = target.blockPosition();
+        int thrown = 0;
+        outer:
+        for (int dx = -2; dx <= 2; dx++) {
+            for (int dz = -2; dz <= 2; dz++) {
+                if (thrown >= 4) break outer;
+                BlockPos pos = center.offset(dx, -1, dz);
+                BlockState state = level.getBlockState(pos);
+                if (state.isAir() || state.is(Blocks.BEDROCK)) continue;
+                if (state.getDestroySpeed(level, pos) < 0) continue;
+                if (RANDOM.nextFloat() > 0.5f) continue;
+                FallingBlockEntity fbe = FallingBlockEntity.fall(level, pos, state);
+                fbe.setDeltaMovement(
+                        (RANDOM.nextDouble() - 0.5) * 0.5,
+                        1.5 + RANDOM.nextDouble() * 0.5,
+                        (RANDOM.nextDouble() - 0.5) * 0.5);
+                fbe.dropItem = false;
+                thrown++;
+            }
         }
 
         level.playSound(null, target.blockPosition(),
