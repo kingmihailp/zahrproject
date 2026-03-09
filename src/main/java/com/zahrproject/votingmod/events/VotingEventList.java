@@ -1365,6 +1365,61 @@ public class VotingEventList {
                 server -> ScreetchHandler.activate(server, 10 * 60 * 1000L)
         ));
 
+
+        // ── Special: elemental blade enchanted books ──────────────────────────
+
+        events.add(new VotingEvent(
+                "Выдать всем игрокам зачарованную книгу «Лезвие воды»",
+                server -> {
+                    for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                        ItemStack book = new ItemStack(Items.ENCHANTED_BOOK);
+                        EnchantedBookItem.addEnchantment(book,
+                                new EnchantmentInstance(ModEnchantments.WATER_BLADE.get(), 1));
+                        if (!player.getInventory().add(book)) player.drop(book, false);
+                    }
+                    broadcast(server, "Все получили книгу «Лезвие воды»! Зачаруй меч или топор — удар создаёт поток воды!");
+                }
+        ));
+
+        events.add(new VotingEvent(
+                "Выдать всем игрокам зачарованную книгу «Лезвие огня»",
+                server -> {
+                    for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                        ItemStack book = new ItemStack(Items.ENCHANTED_BOOK);
+                        EnchantedBookItem.addEnchantment(book,
+                                new EnchantmentInstance(ModEnchantments.FIRE_BLADE.get(), 1));
+                        if (!player.getInventory().add(book)) player.drop(book, false);
+                    }
+                    broadcast(server, "Все получили книгу «Лезвие огня»! Удар окутывает врага огнём на 15 секунд!");
+                }
+        ));
+
+        events.add(new VotingEvent(
+                "Выдать всем игрокам зачарованную книгу «Лезвие земли»",
+                server -> {
+                    for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                        ItemStack book = new ItemStack(Items.ENCHANTED_BOOK);
+                        EnchantedBookItem.addEnchantment(book,
+                                new EnchantmentInstance(ModEnchantments.EARTH_BLADE.get(), 1));
+                        if (!player.getInventory().add(book)) player.drop(book, false);
+                    }
+                    broadcast(server, "Все получили книгу «Лезвие земли»! Удар вызывает мини-землетрясение!");
+                }
+        ));
+
+        events.add(new VotingEvent(
+                "Выдать всем игрокам зачарованную книгу «Лезвие ветра»",
+                server -> {
+                    for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                        ItemStack book = new ItemStack(Items.ENCHANTED_BOOK);
+                        EnchantedBookItem.addEnchantment(book,
+                                new EnchantmentInstance(ModEnchantments.WIND_BLADE.get(), 1));
+                        if (!player.getInventory().add(book)) player.drop(book, false);
+                    }
+                    broadcast(server, "Все получили книгу «Лезвие ветра»! Удар создаёт торнадо, запускающий врага в воздух!");
+                }
+        ));
+
         // ── Special: aquaman — breathe underwater, suffocate on surface ────────
 
         events.add(new VotingEvent(

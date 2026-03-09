@@ -25,4 +25,16 @@ public class ModEnchantments {
 
     public static final RegistryObject<Enchantment> ANTI_GRAVITY =
             ENCHANTMENTS.register("anti_gravity", AntiGravityEnchantment::new);
+
+    public static final RegistryObject<Enchantment> WATER_BLADE =
+            ENCHANTMENTS.register("water_blade", WaterBladeEnchantment::new);
+
+    public static final RegistryObject<Enchantment> FIRE_BLADE =
+            ENCHANTMENTS.register("fire_blade", FireBladeEnchantment::new);
+
+    public static final RegistryObject<Enchantment> EARTH_BLADE =
+            ENCHANTMENTS.register("earth_blade", EarthBladeEnchantment::new);
+
+    public static final RegistryObject<Enchantment> WIND_BLADE =
+            ENCHANTMENTS.register("wind_blade", WindBladeEnchantment::new);
 }
