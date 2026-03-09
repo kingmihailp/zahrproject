@@ -3,6 +3,7 @@ package com.zahrproject.votingmod.client;
 import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormat;
+import com.zahrproject.votingmod.mixin.RenderTypeAccessor;
 import net.minecraft.client.renderer.RenderStateShard;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.texture.DynamicTexture;
@@ -29,7 +30,7 @@ public final class LimeGlintHelper extends RenderStateShard {
     /**
      * Replacement for {@link RenderType#glintDirect()} — used in GUI / flat lighting.
      */
-    public static final RenderType LIME_GLINT_DIRECT = RenderType.create(
+    public static final RenderType LIME_GLINT_DIRECT = RenderTypeAccessor.invokeCreate(
             "votingmod:lime_glint_direct",
             DefaultVertexFormat.POSITION_TEX,
             VertexFormat.Mode.QUADS,
@@ -46,7 +47,7 @@ public final class LimeGlintHelper extends RenderStateShard {
     /**
      * Replacement for {@link RenderType#glintTranslucent()} — used in 3-D world rendering.
      */
-    public static final RenderType LIME_GLINT_TRANSLUCENT = RenderType.create(
+    public static final RenderType LIME_GLINT_TRANSLUCENT = RenderTypeAccessor.invokeCreate(
             "votingmod:lime_glint_translucent",
             DefaultVertexFormat.POSITION_TEX,
             VertexFormat.Mode.QUADS,
