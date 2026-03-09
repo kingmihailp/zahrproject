@@ -24,15 +24,16 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * Replaces the standard enchantment glint with a lime-green glint when
  * the rendered item carries the Terra Blade enchantment.
  *
- * Uses targets = "..." instead of ItemRenderer.class to avoid compile-time
- * dependency on the client-only class inside the annotation processor.
+ * remap = false is required on every annotation because Forge 1.20.1 uses
+ * official Mojang names at runtime — the Mixin annotation processor cannot
+ * find SRG mapping entries for these names, so we skip remapping entirely.
+ * The names in the descriptors ("render", "getFoilBufferDirect", …) match
+ * the actual runtime names in the production Forge 1.20.1 jar.
  */
 @Mixin(targets = "net.minecraft.client.renderer.ItemRenderer")
 public class ItemRendererMixin {
 
-    // Shadow the two static foil-buffer helpers so we can call them without
-    // a direct compile-time reference to ItemRenderer.
-    @Shadow
+    @Shadow(remap = false)
     private static VertexConsumer getFoilBufferDirect(MultiBufferSource bufferSource,
                                                        RenderType renderType,
                                                        boolean isItem,
@@ -40,7 +41,7 @@ public class ItemRendererMixin {
         throw new AssertionError("@Shadow");
     }
 
-    @Shadow
+    @Shadow(remap = false)
     private static VertexConsumer getFoilBuffer(MultiBufferSource bufferSource,
                                                  RenderType renderType,
                                                  boolean isItem,
@@ -61,7 +62,8 @@ public class ItemRendererMixin {
                   "Lcom/mojang/blaze3d/vertex/PoseStack;" +
                   "Lnet/minecraft/client/renderer/MultiBufferSource;II" +
                   "Lnet/minecraft/client/resources/model/BakedModel;)V",
-        at = @At("HEAD"))
+        at = @At("HEAD"),
+        remap = false)
     private void onRenderHead(ItemStack stack,
                                ItemDisplayContext displayContext,
                                boolean leftHand,
@@ -80,7 +82,8 @@ public class ItemRendererMixin {
                   "Lcom/mojang/blaze3d/vertex/PoseStack;" +
                   "Lnet/minecraft/client/renderer/MultiBufferSource;II" +
                   "Lnet/minecraft/client/resources/model/BakedModel;)V",
-        at = @At("RETURN"))
+        at = @At("RETURN"),
+        remap = false)
     private void onRenderReturn(ItemStack stack,
                                  ItemDisplayContext displayContext,
                                  boolean leftHand,
@@ -106,7 +109,8 @@ public class ItemRendererMixin {
                           "getFoilBufferDirect(" +
                           "Lnet/minecraft/client/renderer/MultiBufferSource;" +
                           "Lnet/minecraft/client/renderer/RenderType;ZZ)" +
-                          "Lcom/mojang/blaze3d/vertex/VertexConsumer;"))
+                          "Lcom/mojang/blaze3d/vertex/VertexConsumer;"),
+        remap = false)
     private VertexConsumer redirectFoilBufferDirect(MultiBufferSource bufferSource,
                                                      RenderType renderType,
                                                      boolean isItem,
@@ -132,7 +136,8 @@ public class ItemRendererMixin {
                           "getFoilBuffer(" +
                           "Lnet/minecraft/client/renderer/MultiBufferSource;" +
                           "Lnet/minecraft/client/renderer/RenderType;ZZ)" +
-                          "Lcom/mojang/blaze3d/vertex/VertexConsumer;"))
+                          "Lcom/mojang/blaze3d/vertex/VertexConsumer;"),
+        remap = false)
     private VertexConsumer redirectFoilBuffer(MultiBufferSource bufferSource,
                                                RenderType renderType,
                                                boolean isItem,
