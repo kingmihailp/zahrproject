@@ -94,19 +94,36 @@ public class ScreetchEntity extends Entity {
         // Слишком далеко (> 16 блоков) — тихий деспавн
         if (player.distanceTo(this) > 16.0) { this.discard(); return; }
 
-        // Держим дистанцию ≥ 2 блоков от игрока ──────────────────────────────
+        // Следуем за игроком, держа ровно 2 блока горизонтальной дистанции ─────
         double dx = this.getX() - player.getX();
         double dz = this.getZ() - player.getZ();
         double horizDist = Math.sqrt(dx * dx + dz * dz);
-        if (horizDist < 2.0) {
-            if (horizDist < 0.01) {
-                // Прямо на игроке — отступаем назад от взгляда игрока
-                Vec3 look = player.getLookAngle();
-                dx = -look.x; dz = -look.z;
-            }
-            double factor = 2.0 / Math.sqrt(dx * dx + dz * dz);
-            this.setPos(player.getX() + dx * factor, player.getY(), player.getZ() + dz * factor);
+
+        // Нормируем направление от игрока к скритчу
+        if (horizDist < 0.01) {
+            Vec3 back = player.getLookAngle();
+            dx = -back.x; dz = -back.z;
+            double len = Math.sqrt(dx * dx + dz * dz);
+            if (len < 0.01) { dx = 1.0; dz = 0.0; len = 1.0; }
+            dx /= len; dz /= len;
+        } else {
+            dx /= horizDist; dz /= horizDist;
         }
+
+        if (horizDist < 2.0) {
+            // Игрок подошёл вплотную — мгновенно отступаем на 2 блока
+            this.setPos(player.getX() + dx * 2.0, player.getY(), player.getZ() + dz * 2.0);
+        } else if (horizDist > 2.05) {
+            // Игрок ушёл вперёд — догоняем с шагом до 0.3 б/тик
+            double step = Math.min(horizDist - 2.0, 0.3);
+            this.setPos(player.getX() + dx * (horizDist - step),
+                        player.getY(),
+                        player.getZ() + dz * (horizDist - step));
+        }
+
+        // Поворачиваем скритча лицом к игроку
+        this.setYRot((float) Math.toDegrees(Math.atan2(dx, -dz)));
+        this.yRotO = this.getYRot();
 
         // Проверяем угол взгляда ───────────────────────────────────────────────
         Vec3 lookDir    = player.getLookAngle();
