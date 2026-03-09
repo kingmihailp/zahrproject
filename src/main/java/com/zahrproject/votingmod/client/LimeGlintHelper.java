@@ -10,6 +10,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.FastColor;
 
 import java.lang.reflect.Method;
+import java.util.Arrays;
 
 /**
  * Provides lime-coloured enchantment glint render types for the Terra Blade.
@@ -27,12 +28,19 @@ public final class LimeGlintHelper extends RenderStateShard {
 
     private static RenderType create(String name, VertexFormat format, VertexFormat.Mode mode,
                                      int bufferSize, RenderType.CompositeState state) {
+        // At runtime Minecraft methods have SRG names (m_XXXXX_), so we cannot look up
+        // RenderType.create() by name. Instead scan all declared methods and match by
+        // parameter types alone — there is exactly one overload with this signature.
+        Class<?>[] sig = {String.class, VertexFormat.class, VertexFormat.Mode.class,
+                          int.class, RenderType.CompositeState.class};
         try {
-            Method m = RenderType.class.getDeclaredMethod("create",
-                    String.class, VertexFormat.class, VertexFormat.Mode.class,
-                    int.class, RenderType.CompositeState.class);
-            m.setAccessible(true);
-            return (RenderType) m.invoke(null, name, format, mode, bufferSize, state);
+            for (Method m : RenderType.class.getDeclaredMethods()) {
+                if (Arrays.equals(m.getParameterTypes(), sig)) {
+                    m.setAccessible(true);
+                    return (RenderType) m.invoke(null, name, format, mode, bufferSize, state);
+                }
+            }
+            throw new NoSuchMethodException("No RenderType method with signature (String, VertexFormat, Mode, int, CompositeState)");
         } catch (ReflectiveOperationException e) {
             throw new RuntimeException("Failed to invoke RenderType.create", e);
         }
