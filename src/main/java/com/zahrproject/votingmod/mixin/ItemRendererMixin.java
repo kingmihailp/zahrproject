@@ -14,47 +14,32 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
  * Replaces the standard enchantment glint with a lime-green glint when
  * the rendered item carries the Terra Blade enchantment.
  *
- * remap = false is required on every annotation because Forge 1.20.1 uses
- * official Mojang names at runtime — the Mixin annotation processor cannot
- * find SRG mapping entries for these names, so we skip remapping entirely.
- * The names in the descriptors ("render", "getFoilBufferDirect", …) match
- * the actual runtime names in the production Forge 1.20.1 jar.
+ * remap = false is used because the Mixin AP cannot resolve SRG mappings for
+ * Mojang-named methods. The method names here are the actual runtime names in
+ * the production Forge 1.20.1 jar.
+ *
+ * @Redirect into render() was previously used but had 0 injection points:
+ * getFoilBufferDirect/getFoilBuffer are not called directly from render() but
+ * from a private helper. We now @Inject directly into those static methods.
  */
 @Mixin(targets = "net.minecraft.client.renderer.ItemRenderer")
 public class ItemRendererMixin {
 
-    @Shadow(remap = false)
-    private static VertexConsumer getFoilBufferDirect(MultiBufferSource bufferSource,
-                                                       RenderType renderType,
-                                                       boolean isItem,
-                                                       boolean isGlint) {
-        throw new AssertionError("@Shadow");
-    }
-
-    @Shadow(remap = false)
-    private static VertexConsumer getFoilBuffer(MultiBufferSource bufferSource,
-                                                 RenderType renderType,
-                                                 boolean isItem,
-                                                 boolean isGlint) {
-        throw new AssertionError("@Shadow");
-    }
-
-    // ── Thread-local flag ─────────────────────────────────────────────────────
+    // ── Thread-local flag set while render() processes a Terra Blade item ─────
 
     private static final ThreadLocal<Boolean> TERRA_BLADE_ACTIVE =
             ThreadLocal.withInitial(() -> false);
 
-    // ── Inject: detect Terra Blade at render start / end ─────────────────────
+    // ── Inject: set/clear flag around render() ────────────────────────────────
 
     @Inject(
         method = "render(Lnet/minecraft/world/item/ItemStack;" +
@@ -96,58 +81,48 @@ public class ItemRendererMixin {
         TERRA_BLADE_ACTIVE.set(false);
     }
 
-    // ── Redirect: getFoilBufferDirect (GUI / flat-lit items) ──────────────────
+    // ── Inject into getFoilBufferDirect (GUI / flat-lit context) ──────────────
 
-    @Redirect(
-        method = "render(Lnet/minecraft/world/item/ItemStack;" +
-                  "Lnet/minecraft/world/item/ItemDisplayContext;Z" +
-                  "Lcom/mojang/blaze3d/vertex/PoseStack;" +
-                  "Lnet/minecraft/client/renderer/MultiBufferSource;II" +
-                  "Lnet/minecraft/client/resources/model/BakedModel;)V",
-        at = @At(value = "INVOKE",
-                 target = "Lnet/minecraft/client/renderer/ItemRenderer;" +
-                          "getFoilBufferDirect(" +
-                          "Lnet/minecraft/client/renderer/MultiBufferSource;" +
-                          "Lnet/minecraft/client/renderer/RenderType;ZZ)" +
-                          "Lcom/mojang/blaze3d/vertex/VertexConsumer;"),
+    @Inject(
+        method = "getFoilBufferDirect(" +
+                  "Lnet/minecraft/client/renderer/MultiBufferSource;" +
+                  "Lnet/minecraft/client/renderer/RenderType;ZZ)" +
+                  "Lcom/mojang/blaze3d/vertex/VertexConsumer;",
+        at = @At("HEAD"),
+        cancellable = true,
         remap = false)
-    private VertexConsumer redirectFoilBufferDirect(MultiBufferSource bufferSource,
-                                                     RenderType renderType,
-                                                     boolean isItem,
-                                                     boolean isGlint) {
+    private static void injectFoilBufferDirect(MultiBufferSource bufferSource,
+                                                RenderType renderType,
+                                                boolean isItem,
+                                                boolean isGlint,
+                                                CallbackInfoReturnable<VertexConsumer> cir) {
         if (isGlint && TERRA_BLADE_ACTIVE.get()) {
-            return VertexMultiConsumer.create(
+            cir.setReturnValue(VertexMultiConsumer.create(
                     bufferSource.getBuffer(LimeGlintHelper.LIME_GLINT_DIRECT),
-                    bufferSource.getBuffer(renderType));
+                    bufferSource.getBuffer(renderType)));
         }
-        return getFoilBufferDirect(bufferSource, renderType, isItem, isGlint);
     }
 
-    // ── Redirect: getFoilBuffer (3-D world items) ─────────────────────────────
+    // ── Inject into getFoilBuffer (3-D world context) ─────────────────────────
 
-    @Redirect(
-        method = "render(Lnet/minecraft/world/item/ItemStack;" +
-                  "Lnet/minecraft/world/item/ItemDisplayContext;Z" +
-                  "Lcom/mojang/blaze3d/vertex/PoseStack;" +
-                  "Lnet/minecraft/client/renderer/MultiBufferSource;II" +
-                  "Lnet/minecraft/client/resources/model/BakedModel;)V",
-        at = @At(value = "INVOKE",
-                 target = "Lnet/minecraft/client/renderer/ItemRenderer;" +
-                          "getFoilBuffer(" +
-                          "Lnet/minecraft/client/renderer/MultiBufferSource;" +
-                          "Lnet/minecraft/client/renderer/RenderType;ZZ)" +
-                          "Lcom/mojang/blaze3d/vertex/VertexConsumer;"),
+    @Inject(
+        method = "getFoilBuffer(" +
+                  "Lnet/minecraft/client/renderer/MultiBufferSource;" +
+                  "Lnet/minecraft/client/renderer/RenderType;ZZ)" +
+                  "Lcom/mojang/blaze3d/vertex/VertexConsumer;",
+        at = @At("HEAD"),
+        cancellable = true,
         remap = false)
-    private VertexConsumer redirectFoilBuffer(MultiBufferSource bufferSource,
-                                               RenderType renderType,
-                                               boolean isItem,
-                                               boolean isGlint) {
+    private static void injectFoilBuffer(MultiBufferSource bufferSource,
+                                          RenderType renderType,
+                                          boolean isItem,
+                                          boolean isGlint,
+                                          CallbackInfoReturnable<VertexConsumer> cir) {
         if (isGlint && TERRA_BLADE_ACTIVE.get()) {
-            return VertexMultiConsumer.create(
+            cir.setReturnValue(VertexMultiConsumer.create(
                     bufferSource.getBuffer(LimeGlintHelper.LIME_GLINT_TRANSLUCENT),
-                    bufferSource.getBuffer(renderType));
+                    bufferSource.getBuffer(renderType)));
         }
-        return getFoilBuffer(bufferSource, renderType, isItem, isGlint);
     }
 
     // ── Helper ────────────────────────────────────────────────────────────────
