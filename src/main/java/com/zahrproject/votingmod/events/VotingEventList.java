@@ -8,6 +8,7 @@ import com.zahrproject.votingmod.handler.RandomTextureTracker;
 import com.zahrproject.votingmod.handler.BloodMoonHandler;
 import com.zahrproject.votingmod.handler.MobEffectsHandler;
 import com.zahrproject.votingmod.handler.AquamanHandler;
+import com.zahrproject.votingmod.handler.BomberHandler;
 import com.zahrproject.votingmod.handler.ScreetchHandler;
 import com.zahrproject.votingmod.network.InvertColorsPacket;
 import com.zahrproject.votingmod.network.RandomTexturePacket;
@@ -67,10 +68,16 @@ import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.EnchantmentInstance;
 import net.minecraftforge.registries.ForgeRegistries;
 import net.minecraftforge.server.ServerLifecycleHooks;
+import net.minecraft.core.Holder;
+import net.minecraft.network.protocol.game.ClientboundLevelChunkWithLightPacket;
 import net.minecraft.world.level.GameRules;
+import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.RandomizableContainerBlockEntity;
+import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.chunk.LevelChunkSection;
+import net.minecraft.world.level.chunk.PalettedContainer;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
@@ -1439,6 +1446,80 @@ public class VotingEventList {
                     int value = 10 + RANDOM.nextInt(791); // 10..800
                     server.getGameRules().getRule(GameRules.RULE_RANDOMTICKING).set(value, server);
                     broadcast(server, "randomTickSpeed установлен на " + value + "!");
+                }
+        ));
+
+        // ── Special: Подрывашкер — killed mobs leave primed TNT for 3 min ──────
+
+        events.add(new VotingEvent(
+                "Подрывашкер",
+                server -> {
+                    BomberHandler.activate(server);
+                    broadcast(server, "Подрывашкер! Каждый убитый моб оставляет заряженный динамит — 3 минуты!");
+                }
+        ));
+
+        // ── Special: Смена среды — change biome in small area around each player
+
+        events.add(new VotingEvent(
+                "Смена среды",
+                server -> {
+                    Registry<Biome> biomeRegistry =
+                            server.overworld().registryAccess().registryOrThrow(Registries.BIOME);
+                    List<ResourceKey<Biome>> biomeKeys = new ArrayList<>(biomeRegistry.registryKeySet());
+                    if (biomeKeys.isEmpty()) return;
+
+                    int radius = 2; // chunks (≈ 5×5 = 80×80 blocks)
+
+                    for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                        ServerLevel level = player.serverLevel();
+
+                        // Each player gets their own random biome for maximum chaos.
+                        ResourceKey<Biome> chosenKey = biomeKeys.get(RANDOM.nextInt(biomeKeys.size()));
+                        Holder<Biome> biomeHolder = biomeRegistry.getHolderOrThrow(chosenKey);
+
+                        int chunkX = player.chunkPosition().x;
+                        int chunkZ = player.chunkPosition().z;
+                        int viewDist = server.getPlayerList().getViewDistance();
+
+                        for (int cx = chunkX - radius; cx <= chunkX + radius; cx++) {
+                            for (int cz = chunkZ - radius; cz <= chunkZ + radius; cz++) {
+                                if (!level.isLoaded(new BlockPos(cx * 16, 0, cz * 16))) continue;
+                                LevelChunk chunk = level.getChunk(cx, cz);
+
+                                // Biomes are stored per section at 4×4×4 resolution.
+                                for (LevelChunkSection section : chunk.getSections()) {
+                                    if (!(section.getBiomes() instanceof PalettedContainer<Holder<Biome>> biomes))
+                                        continue;
+                                    biomes.acquire();
+                                    try {
+                                        for (int bx = 0; bx < 4; bx++)
+                                            for (int by = 0; by < 4; by++)
+                                                for (int bz = 0; bz < 4; bz++)
+                                                    biomes.getAndSetUnchecked(bx, by, bz, biomeHolder);
+                                    } finally {
+                                        biomes.release();
+                                    }
+                                }
+
+                                chunk.setUnsaved(true);
+
+                                // Resend the chunk to nearby players so they see the biome update.
+                                final int fcx = cx, fcz = cz;
+                                for (ServerPlayer p : level.players()) {
+                                    if (Math.abs(p.chunkPosition().x - fcx) <= viewDist
+                                            && Math.abs(p.chunkPosition().z - fcz) <= viewDist) {
+                                        p.connection.send(new ClientboundLevelChunkWithLightPacket(
+                                                chunk, level.getLightEngine(), null, null, true));
+                                    }
+                                }
+                            }
+                        }
+
+                        broadcast(server, "Смена среды! Биом вокруг "
+                                + player.getName().getString()
+                                + " → " + chosenKey.location() + "!");
+                    }
                 }
         ));
 
