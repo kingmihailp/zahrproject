@@ -3,6 +3,7 @@ package com.zahrproject.votingmod.client;
 import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormat;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.RenderStateShard;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.texture.DynamicTexture;
@@ -108,5 +109,13 @@ public final class LimeGlintHelper extends RenderStateShard {
             }
         }
         return new DynamicTexture(img);
+    }
+
+    /**
+     * Registers the lime glint texture with the client texture manager.
+     * Must be called on the render thread (FMLClientSetupEvent).
+     */
+    public static void registerTexture() {
+        Minecraft.getInstance().getTextureManager().register(LIME_GLINT_TEXTURE, createTexture());
     }
 }
