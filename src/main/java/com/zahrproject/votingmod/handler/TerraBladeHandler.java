@@ -13,6 +13,9 @@ import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.living.LivingHurtEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
+import com.zahrproject.votingmod.network.ModNetwork;
+import com.zahrproject.votingmod.network.TerraBladeWavePacket;
+import net.minecraft.world.entity.player.Player;
 import org.joml.Vector3f;
 
 import java.util.*;
@@ -95,11 +98,22 @@ public class TerraBladeHandler {
         level.sendParticles(DUST, cx, cy, cz, 8, 0.3, 0.4, 0.3, 0.0);
     }
 
-    // ── Ranged: left-click in empty space ─────────────────────────────────────
+    // ── Ranged: left-click in empty space (fires CLIENT-side only) ────────────
 
     @SubscribeEvent
     public static void onLeftClickEmpty(PlayerInteractEvent.LeftClickEmpty event) {
-        if (!(event.getEntity() instanceof ServerPlayer player)) return;
+        Player player = event.getEntity();
+        if (!player.level().isClientSide()) return;
+
+        ItemStack weapon = player.getMainHandItem();
+        if (EnchantmentHelper.getTagEnchantmentLevel(ModEnchantments.TERRA_BLADE.get(), weapon) <= 0) return;
+
+        ModNetwork.CHANNEL.sendToServer(new TerraBladeWavePacket());
+    }
+
+    // ── Called from TerraBladeWavePacket on the server ────────────────────────
+
+    public static void trySpawnWave(ServerPlayer player) {
         if (!(player.level() instanceof ServerLevel level)) return;
 
         ItemStack weapon = player.getMainHandItem();

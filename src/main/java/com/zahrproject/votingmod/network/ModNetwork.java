@@ -91,5 +91,12 @@ public class ModNetwork {
                 RandomTexturePacket::encode,
                 RandomTexturePacket::decode,
                 RandomTexturePacket::handle);
+
+        // C2S: Client requests the server to spawn a Terra Blade wave
+        CHANNEL.registerMessage(id++,
+                TerraBladeWavePacket.class,
+                TerraBladeWavePacket::encode,
+                TerraBladeWavePacket::decode,
+                TerraBladeWavePacket::handle);
     }
 }
