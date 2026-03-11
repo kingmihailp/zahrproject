@@ -5,6 +5,8 @@ import net.minecraft.core.particles.DustColorTransitionOptions;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import net.minecraft.world.phys.AABB;
@@ -40,7 +42,7 @@ public class TerraBladeHandler {
 
     // ── Wave parameters ───────────────────────────────────────────────────────
     private static final double WAVE_SPEED      = 1.5;  // blocks per tick
-    private static final int    WAVE_MAX_TICKS  = 8;    // 12 blocks max range
+    private static final int    WAVE_MAX_TICKS  = 16;   // 24 blocks max range
     private static final float  WAVE_HIT_RADIUS = 0.8f;
     private static final float  WAVE_DAMAGE     = 8.0f; // 4 hearts, armor-ignoring
     private static final int    WAVE_COOLDOWN   = 10;   // ticks between waves
@@ -123,6 +125,9 @@ public class TerraBladeHandler {
         Long lastTime = WAVE_COOLDOWNS.get(player.getUUID());
         if (lastTime != null && now - lastTime < WAVE_COOLDOWN) return;
         WAVE_COOLDOWNS.put(player.getUUID(), now);
+
+        level.playSound(null, player.blockPosition(), SoundEvents.PLAYER_ATTACK_SWEEP,
+                SoundSource.PLAYERS, 1.0f, 0.8f);
 
         Vec3 start = player.getEyePosition();
         Vec3 look  = player.getLookAngle();
