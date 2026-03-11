@@ -1510,7 +1510,7 @@ public class VotingEventList {
                                     if (Math.abs(p.chunkPosition().x - fcx) <= viewDist
                                             && Math.abs(p.chunkPosition().z - fcz) <= viewDist) {
                                         p.connection.send(new ClientboundLevelChunkWithLightPacket(
-                                                chunk, level.getLightEngine(), null, null, true));
+                                                chunk, level.getLightEngine(), null, null));
                                     }
                                 }
                             }
