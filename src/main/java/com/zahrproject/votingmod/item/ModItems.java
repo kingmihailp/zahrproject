@@ -22,4 +22,13 @@ public class ModItems {
                     6000                                  // track length in ticks (5 min placeholder)
             )
     );
+
+    /**
+     * «Дюп» — редкий предмет, выпадающий при ломании любого блока с шансом 0.0001%.
+     * Помещённый в сетку крафта, удваивает результат любого рецепта и расходуется.
+     */
+    public static final RegistryObject<Item> DUP = ITEMS.register(
+            "dup",
+            () -> new DupItem(new Item.Properties().stacksTo(1))
+    );
 }

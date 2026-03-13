@@ -19,4 +19,9 @@ public class ModRecipes {
     public static final RegistryObject<SimpleCraftingRecipeSerializer<TerraBladeBookRecipe>> TERRA_BLADE_BOOK_SERIALIZER =
             RECIPE_SERIALIZERS.register("terra_blade_book",
                     () -> new SimpleCraftingRecipeSerializer<>(TerraBladeBookRecipe::new));
+
+    /** Serializer for the «Дюп» crafting recipe that doubles any craft result. */
+    public static final RegistryObject<SimpleCraftingRecipeSerializer<DupRecipe>> DUP_SERIALIZER =
+            RECIPE_SERIALIZERS.register("dup",
+                    () -> new SimpleCraftingRecipeSerializer<>(DupRecipe::new));
 }

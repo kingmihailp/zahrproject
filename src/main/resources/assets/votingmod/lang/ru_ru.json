@@ -12,6 +12,8 @@
   "enchantment.votingmod.fire_blade": "Лезвие огня",
   "enchantment.votingmod.earth_blade": "Лезвие земли",
   "enchantment.votingmod.wind_blade": "Лезвие ветра",
-  "enchantment.votingmod.terra_blade": "Терра-лезвие"
+  "enchantment.votingmod.terra_blade": "Терра-лезвие",
+  "item.votingmod.dup": "Дюп",
+  "item.votingmod.dup.desc": "Положи в крафт с чем угодно — удвоит результат и исчезнет"
 }
 

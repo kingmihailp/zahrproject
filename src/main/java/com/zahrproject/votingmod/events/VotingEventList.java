@@ -9,6 +9,7 @@ import com.zahrproject.votingmod.handler.BloodMoonHandler;
 import com.zahrproject.votingmod.handler.MobEffectsHandler;
 import com.zahrproject.votingmod.handler.AquamanHandler;
 import com.zahrproject.votingmod.handler.BomberHandler;
+import com.zahrproject.votingmod.handler.JebNamingData;
 import com.zahrproject.votingmod.handler.ScreetchHandler;
 import com.zahrproject.votingmod.network.InvertColorsPacket;
 import com.zahrproject.votingmod.network.RandomTexturePacket;
@@ -1520,6 +1521,18 @@ public class VotingEventList {
                                 + player.getName().getString()
                                 + " → " + chosenKey.location() + "!");
                     }
+                }
+        ));
+
+        // ── _jeb naming ability ────────────────────────────────────────────────
+
+        events.add(new VotingEvent(
+                "Навсегда дать игрокам способность: бирка «_jeb» делает любую сущность радужной!",
+                server -> {
+                    JebNamingData.get(server).setEnabled(true);
+                    broadcast(server,
+                            "Теперь все игроки могут назвать ЛЮБУЮ сущность биркой «_jeb» "
+                                    + "— она начнёт переливаться всеми цветами радуги!");
                 }
         ));
 

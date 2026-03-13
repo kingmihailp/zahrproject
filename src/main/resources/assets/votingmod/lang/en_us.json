@@ -12,6 +12,8 @@
   "enchantment.votingmod.fire_blade": "Fire Blade",
   "enchantment.votingmod.earth_blade": "Earth Blade",
   "enchantment.votingmod.wind_blade": "Wind Blade",
-  "enchantment.votingmod.terra_blade": "Terra Blade"
+  "enchantment.votingmod.terra_blade": "Terra Blade",
+  "item.votingmod.dup": "Dup",
+  "item.votingmod.dup.desc": "Put in a crafting grid with anything — doubles the result and vanishes"
 }
 

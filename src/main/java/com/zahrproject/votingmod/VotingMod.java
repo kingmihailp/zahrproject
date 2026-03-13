@@ -44,6 +44,7 @@ import com.zahrproject.votingmod.handler.BomberHandler;
 import com.zahrproject.votingmod.handler.TerraBladeHandler;
 import com.zahrproject.votingmod.handler.ScreetchHandler;
 import com.zahrproject.votingmod.handler.XShotHandler;
+import com.zahrproject.votingmod.handler.JebNamingHandler;
 import com.zahrproject.votingmod.network.ModNetwork;
 import com.zahrproject.votingmod.recipe.ModRecipes;
 import net.minecraftforge.api.distmarker.Dist;
@@ -100,6 +101,7 @@ public class VotingMod {
         MinecraftForge.EVENT_BUS.register(BladeEnchantmentsHandler.class);
         MinecraftForge.EVENT_BUS.register(TerraBladeHandler.class);
         MinecraftForge.EVENT_BUS.register(BomberHandler.class);
+        MinecraftForge.EVENT_BUS.register(new JebNamingHandler());
         LOGGER.info("[VotingMod] Mod initialized!");
     }
 
