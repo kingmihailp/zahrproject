@@ -9,11 +9,9 @@ import net.minecraft.world.entity.projectile.FishingHook;
 import net.minecraftforge.event.entity.EntityJoinLevelEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.util.ObfuscationReflectionHelper;
 import net.minecraftforge.network.PacketDistributor;
 import net.minecraftforge.server.ServerLifecycleHooks;
 
-import java.lang.reflect.Field;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -31,11 +29,6 @@ public class FishingTrickHandler {
 
     private static final String NBT_EXPIRY_KEY   = "votingmod_fishingtrick_expiry";
     private static final String NBT_DURATION_KEY = "votingmod_fishingtrick_duration";
-
-    private static final Field TIME_UNTIL_LURED_FIELD =
-            ObfuscationReflectionHelper.findField(FishingHook.class, "timeUntilLured");
-    private static final Field LUCK_FIELD =
-            ObfuscationReflectionHelper.findField(FishingHook.class, "luck");
 
     private static final ScheduledExecutorService SCHEDULER =
             Executors.newSingleThreadScheduledExecutor(r -> {
@@ -82,12 +75,8 @@ public class FishingTrickHandler {
         if (event.getLevel().isClientSide()) return;
         if (!(event.getEntity() instanceof FishingHook hook)) return;
 
-        try {
-            TIME_UNTIL_LURED_FIELD.set(hook, 1);
-            LUCK_FIELD.set(hook, 30);
-        } catch (IllegalAccessException e) {
-            throw new RuntimeException("FishingTrickHandler: failed to set FishingHook fields", e);
-        }
+        hook.timeUntilLured = 1;
+        hook.luck = 30;
     }
 
     @SubscribeEvent
