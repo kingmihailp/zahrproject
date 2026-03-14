@@ -71,9 +71,7 @@ public class ChargedCreepersHandler {
         if (event.getLevel().isClientSide()) return;
         if (!(event.getEntity() instanceof Creeper creeper)) return;
 
-        CompoundTag tag = new CompoundTag();
-        tag.putBoolean("powered", true);
-        creeper.readAdditionalSaveData(tag);
+        creeper.setPowered(true);
     }
 
     @SubscribeEvent
