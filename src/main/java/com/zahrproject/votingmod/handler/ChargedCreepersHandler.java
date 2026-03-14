@@ -1,12 +1,12 @@
 package com.zahrproject.votingmod.handler;
 
+import com.zahrproject.votingmod.mixin.CreeperAccessor;
 import com.zahrproject.votingmod.network.EventTimerPacket;
 import com.zahrproject.votingmod.network.ModNetwork;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.monster.Creeper;
-import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraftforge.event.entity.EntityJoinLevelEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -72,7 +72,7 @@ public class ChargedCreepersHandler {
         if (event.getLevel().isClientSide()) return;
         if (!(event.getEntity() instanceof Creeper creeper)) return;
 
-        creeper.getEntityData().set(Creeper.DATA_IS_POWERED, true);
+        creeper.getEntityData().set(CreeperAccessor.getDataIsPowered(), true);
     }
 
     @SubscribeEvent
