@@ -3,6 +3,9 @@ package com.zahrproject.votingmod.handler;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.BedBlock;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.event.entity.player.PlayerSleepInBedEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 
@@ -10,10 +13,16 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
  * Server-side handler for the "Переключить ПлохоеВремя" voting event.
  *
  * When active, intercepts bed-sleep attempts in bed-friendly dimensions
- * (Overworld and similar) and causes an explosion instead of sleeping.
- * In Nether/End, beds already explode via vanilla BedBlock logic.
+ * (Overworld and similar) and causes a vanilla-identical explosion:
+ *   1. Both halves of the bed are removed.
+ *   2. Level.explode() is called with the same parameters vanilla uses in
+ *      Nether/End (badRespawnPointExplosion, power 5, fire=true).
+ * In Nether/End, beds explode via vanilla BedBlock logic before this event fires.
  *
  * The state is a simple toggle: each vote flips active ↔ inactive.
+ *
+ * Note: PlayerSleepInBedEvent always receives the HEAD block position because
+ * BedBlock.use() normalises the pos to the HEAD before calling startSleepInBed().
  */
 public class BadTimeHandler {
 
@@ -34,9 +43,9 @@ public class BadTimeHandler {
     }
 
     /**
-     * Fires when a player tries to sleep in a bed (only in dimensions where
-     * beds are allowed, i.e. the Overworld). Nether/End beds explode before
-     * this event fires via vanilla BedBlock code.
+     * Fires when a player tries to sleep in a bed in a dimension where beds
+     * work (i.e. the Overworld). Mirrors the vanilla Nether/End explosion
+     * from BedBlock.use() exactly.
      */
     @SubscribeEvent
     public static void onPlayerSleepInBed(PlayerSleepInBedEvent event) {
@@ -47,14 +56,31 @@ public class BadTimeHandler {
         // Cancel the sleep attempt
         event.setResult(Player.SleepResult.OTHER_PROBLEM);
 
-        // Explode at the bed position
+        // pos is the HEAD block (BedBlock.use() normalises before firing the event)
         BlockPos pos = event.getPos();
+        BlockState bedState = level.getBlockState(pos);
+        Vec3 center = Vec3.atCenterOf(pos);
+
+        // Remove the HEAD block
+        level.removeBlock(pos, false);
+
+        // Remove the FOOT block — same logic as vanilla BedBlock.use()
+        if (bedState.getBlock() instanceof BedBlock) {
+            BlockPos footPos = pos.relative(bedState.getValue(BedBlock.FACING).getOpposite());
+            if (level.getBlockState(footPos).is(bedState.getBlock())) {
+                level.removeBlock(footPos, false);
+            }
+        }
+
+        // Explode exactly as vanilla does for Nether/End beds:
+        // null entity, badRespawnPointExplosion damage source, null calculator,
+        // power 5.0, fire = true, BLOCK interaction.
         level.explode(
                 null,
-                pos.getX() + 0.5,
-                pos.getY() + 0.5,
-                pos.getZ() + 0.5,
-                5.0f,
+                level.damageSources().badRespawnPointExplosion(center),
+                null,
+                center.x, center.y, center.z,
+                5.0f, true,
                 Level.ExplosionInteraction.BLOCK
         );
     }

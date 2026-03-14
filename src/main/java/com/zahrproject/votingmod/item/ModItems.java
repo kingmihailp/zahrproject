@@ -3,6 +3,7 @@ package com.zahrproject.votingmod.item;
 import com.zahrproject.votingmod.VotingMod;
 import com.zahrproject.votingmod.sound.ModSounds;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.Rarity;
 import net.minecraft.world.item.RecordItem;import net.minecraftforge.registries.DeferredRegister;
 import net.minecraftforge.registries.ForgeRegistries;
 import net.minecraftforge.registries.RegistryObject;
@@ -29,6 +30,6 @@ public class ModItems {
      */
     public static final RegistryObject<Item> DUP = ITEMS.register(
             "dup",
-            () -> new DupItem(new Item.Properties().stacksTo(1))
+            () -> new DupItem(new Item.Properties().stacksTo(1).rarity(Rarity.EPIC))
     );
 }
