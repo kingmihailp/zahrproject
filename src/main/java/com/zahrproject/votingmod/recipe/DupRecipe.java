@@ -9,7 +9,6 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.CraftingBookCategory;
 import net.minecraft.world.item.crafting.CraftingRecipe;
 import net.minecraft.world.item.crafting.CustomRecipe;
-import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.RecipeSerializer;
 import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.level.Level;
@@ -33,7 +32,7 @@ public class DupRecipe extends CustomRecipe {
      * Stores the base recipe found during the last {@link #matches} call,
      * per thread, so {@link #assemble} can reuse it without a Level reference.
      */
-    private final ThreadLocal<RecipeHolder<CraftingRecipe>> cachedBase = new ThreadLocal<>();
+    private final ThreadLocal<CraftingRecipe> cachedBase = new ThreadLocal<>();
 
     public DupRecipe(ResourceLocation id, CraftingBookCategory category) {
         super(id, category);
@@ -46,13 +45,13 @@ public class DupRecipe extends CustomRecipe {
 
         CraftingContainer copy = copyWithoutSlot(container, dupSlot);
 
-        Optional<RecipeHolder<CraftingRecipe>> base =
+        Optional<CraftingRecipe> base =
                 level.getRecipeManager().getRecipeFor(RecipeType.CRAFTING, copy, level);
 
         if (base.isEmpty()) return false;
 
         // Guard against infinite recursion with our own recipe
-        if (base.get().value() instanceof DupRecipe) return false;
+        if (base.get() instanceof DupRecipe) return false;
 
         cachedBase.set(base.get());
         return true;
@@ -60,14 +59,14 @@ public class DupRecipe extends CustomRecipe {
 
     @Override
     public ItemStack assemble(CraftingContainer container, RegistryAccess registryAccess) {
-        RecipeHolder<CraftingRecipe> base = cachedBase.get();
+        CraftingRecipe base = cachedBase.get();
         if (base == null) return ItemStack.EMPTY;
 
         int dupSlot = findDupSlot(container);
         if (dupSlot < 0) return ItemStack.EMPTY;
 
         CraftingContainer copy = copyWithoutSlot(container, dupSlot);
-        ItemStack result = base.value().assemble(copy, registryAccess).copy();
+        ItemStack result = base.assemble(copy, registryAccess).copy();
 
         if (result.isEmpty()) return ItemStack.EMPTY;
 
@@ -78,7 +77,7 @@ public class DupRecipe extends CustomRecipe {
 
     @Override
     public NonNullList<ItemStack> getRemainingItems(CraftingContainer container) {
-        RecipeHolder<CraftingRecipe> base = cachedBase.get();
+        CraftingRecipe base = cachedBase.get();
         int dupSlot = findDupSlot(container);
 
         if (base == null || dupSlot < 0) {
@@ -87,7 +86,7 @@ public class DupRecipe extends CustomRecipe {
 
         // Ask the base recipe what it would leave behind (buckets, bottles, etc.)
         CraftingContainer copy = copyWithoutSlot(container, dupSlot);
-        NonNullList<ItemStack> remaining = base.value().getRemainingItems(copy);
+        NonNullList<ItemStack> remaining = base.getRemainingItems(copy);
         // The DUP slot in the copy is empty so its remaining item is also empty — correct.
         return remaining;
     }
