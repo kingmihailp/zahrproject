@@ -8,32 +8,22 @@ import net.minecraft.world.inventory.CraftingContainer;
 import net.minecraft.world.inventory.TransientCraftingContainer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.CraftingBookCategory;
-import net.minecraft.world.item.crafting.CraftingRecipe;
 import net.minecraft.world.item.crafting.CustomRecipe;
 import net.minecraft.world.item.crafting.RecipeSerializer;
-import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.level.Level;
-
-import java.util.Optional;
 
 /**
  * «Дюп» в крафте: если один экземпляр {@link ModItems#DUP} присутствует
- * в сетке крафта вместе с любым другим рецептом, результат того рецепта
- * удваивается, а сам Дюп расходуется.
+ * в сетке крафта вместе с одинаковыми предметами, все эти предметы
+ * удваиваются, а сам Дюп расходуется.
  *
  * Алгоритм:
  *  1. Найти ячейку с Дюпом.
- *  2. Создать копию контейнера без Дюпа.
- *  3. Найти любой подходящий крафтовый рецепт для этой копии.
- *  4. Вернуть удвоенный результат того рецепта.
+ *  2. Убедиться, что остальные непустые ячейки содержат один и тот же предмет.
+ *  3. Суммировать количество этих предметов и вернуть удвоенное значение.
+ *  4. Потребить все исходные предметы (не только по 1 из ячейки).
  */
 public class DupRecipe extends CustomRecipe {
-
-    /**
-     * Stores the base recipe found during the last {@link #matches} call,
-     * per thread, so {@link #assemble} can reuse it without a Level reference.
-     */
-    private final ThreadLocal<CraftingRecipe> cachedBase = new ThreadLocal<>();
 
     public DupRecipe(ResourceLocation id, CraftingBookCategory category) {
         super(id, category);
@@ -44,57 +34,65 @@ public class DupRecipe extends CustomRecipe {
         int dupSlot = findDupSlot(container);
         if (dupSlot < 0) return false;
 
-        CraftingContainer copy = copyWithoutSlot(container, dupSlot);
+        ItemStack target = ItemStack.EMPTY;
+        for (int i = 0; i < container.getContainerSize(); i++) {
+            if (i == dupSlot) continue;
+            ItemStack stack = container.getItem(i);
+            if (stack.isEmpty()) continue;
+            if (target.isEmpty()) {
+                target = stack;
+            } else if (!ItemStack.isSameItemSameTags(target, stack)) {
+                // Разные предметы — не поддерживается
+                return false;
+            }
+        }
 
-        Optional<CraftingRecipe> base =
-                level.getRecipeManager().getRecipeFor(RecipeType.CRAFTING, copy, level);
-
-        if (base.isEmpty()) return false;
-
-        // Guard against infinite recursion with our own recipe
-        if (base.get() instanceof DupRecipe) return false;
-
-        cachedBase.set(base.get());
-        return true;
+        return !target.isEmpty();
     }
 
     @Override
     public ItemStack assemble(CraftingContainer container, RegistryAccess registryAccess) {
-        CraftingRecipe base = cachedBase.get();
-        if (base == null) return ItemStack.EMPTY;
-
         int dupSlot = findDupSlot(container);
         if (dupSlot < 0) return ItemStack.EMPTY;
 
-        CraftingContainer copy = copyWithoutSlot(container, dupSlot);
-        ItemStack result = base.assemble(copy, registryAccess).copy();
+        ItemStack target = ItemStack.EMPTY;
+        int totalCount = 0;
 
-        if (result.isEmpty()) return ItemStack.EMPTY;
+        for (int i = 0; i < container.getContainerSize(); i++) {
+            if (i == dupSlot) continue;
+            ItemStack stack = container.getItem(i);
+            if (stack.isEmpty()) continue;
+            if (target.isEmpty()) target = stack;
+            totalCount += stack.getCount();
+        }
 
-        // Double the result, clamping to the item's max stack size
-        result.setCount(Math.min(result.getCount() * 2, result.getMaxStackSize()));
+        if (target.isEmpty()) return ItemStack.EMPTY;
+
+        // Потребить все лишние предметы (оставить по 1 в каждой ячейке — их
+        // уберёт стандартная механика крафта)
+        for (int i = 0; i < container.getContainerSize(); i++) {
+            if (i == dupSlot) continue;
+            ItemStack stack = container.getItem(i);
+            if (!stack.isEmpty() && stack.getCount() > 1) {
+                container.removeItem(i, stack.getCount() - 1);
+            }
+        }
+
+        ItemStack result = target.copy();
+        result.setCount(Math.min(totalCount * 2, result.getMaxStackSize()));
         return result;
     }
 
     @Override
     public NonNullList<ItemStack> getRemainingItems(CraftingContainer container) {
-        CraftingRecipe base = cachedBase.get();
-        int dupSlot = findDupSlot(container);
-
-        if (base == null || dupSlot < 0) {
-            return NonNullList.withSize(container.getContainerSize(), ItemStack.EMPTY);
-        }
-
-        // Ask the base recipe what it would leave behind (buckets, bottles, etc.)
-        CraftingContainer copy = copyWithoutSlot(container, dupSlot);
-        NonNullList<ItemStack> remaining = base.getRemainingItems(copy);
-        // The DUP slot in the copy is empty so its remaining item is also empty — correct.
-        return remaining;
+        // Стандартная механика уберёт по 1 предмету из каждой ячейки;
+        // ничего дополнительно возвращать не нужно
+        return NonNullList.withSize(container.getContainerSize(), ItemStack.EMPTY);
     }
 
     @Override
     public boolean canCraftInDimensions(int width, int height) {
-        // Need at least 2 slots: one for the DUP, one for the ingredient
+        // Нужно минимум 2 ячейки: одна для Дюпа, одна для предмета
         return width * height >= 2;
     }
 
@@ -105,26 +103,11 @@ public class DupRecipe extends CustomRecipe {
 
     // ── Helpers ────────────────────────────────────────────────────────────────
 
-    /** Returns the index of the first DUP item in the container, or -1. */
+    /** Возвращает индекс первого слота с Дюпом, или -1. */
     private int findDupSlot(CraftingContainer container) {
         for (int i = 0; i < container.getContainerSize(); i++) {
             if (container.getItem(i).is(ModItems.DUP.get())) return i;
         }
         return -1;
-    }
-
-    /**
-     * Creates a new {@link CraftingContainer} (with a null menu — safe because
-     * {@code CraftingContainer.setChanged()} guards against a null menu)
-     * that is a copy of {@code src} with slot {@code skipSlot} left empty.
-     */
-    private static CraftingContainer copyWithoutSlot(CraftingContainer src, int skipSlot) {
-        CraftingContainer copy = new TransientCraftingContainer(null, src.getWidth(), src.getHeight());
-        for (int i = 0; i < src.getContainerSize(); i++) {
-            if (i != skipSlot) {
-                copy.setItem(i, src.getItem(i).copy());
-            }
-        }
-        return copy;
     }
 }
