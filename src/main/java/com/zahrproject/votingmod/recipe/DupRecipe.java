@@ -5,6 +5,7 @@ import net.minecraft.core.NonNullList;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.inventory.CraftingContainer;
+import net.minecraft.world.inventory.TransientCraftingContainer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.CraftingBookCategory;
 import net.minecraft.world.item.crafting.CraftingRecipe;
@@ -118,7 +119,7 @@ public class DupRecipe extends CustomRecipe {
      * that is a copy of {@code src} with slot {@code skipSlot} left empty.
      */
     private static CraftingContainer copyWithoutSlot(CraftingContainer src, int skipSlot) {
-        CraftingContainer copy = new CraftingContainer(null, src.getWidth(), src.getHeight());
+        CraftingContainer copy = new TransientCraftingContainer(null, src.getWidth(), src.getHeight());
         for (int i = 0; i < src.getContainerSize(); i++) {
             if (i != skipSlot) {
                 copy.setItem(i, src.getItem(i).copy());

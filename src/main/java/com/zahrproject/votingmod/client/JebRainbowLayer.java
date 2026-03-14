@@ -57,7 +57,7 @@ public class JebRainbowLayer<T extends LivingEntity, M extends EntityModel<T>>
         // ── Re-render the entity model with the rainbow tint ──────────────────
         // Using the entity's own texture preserves all surface detail while
         // the colour multiplier shifts the whole model through the rainbow.
-        ResourceLocation texture = this.renderer.getTextureLocation(entity);
+        ResourceLocation texture = this.getRenderer().getTextureLocation(entity);
 
         getParentModel().renderToBuffer(
                 poseStack,
