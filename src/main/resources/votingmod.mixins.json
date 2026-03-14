@@ -4,7 +4,9 @@
   "package": "com.zahrproject.votingmod.mixin",
   "compatibilityLevel": "JAVA_17",
   "refmap": "votingmod.refmap.json",
-  "mixins": [],
+  "mixins": [
+    "FishingHookAccessor"
+  ],
   "client": [
     "ItemRendererMixin",
     "LivingEntityRendererMixin"
