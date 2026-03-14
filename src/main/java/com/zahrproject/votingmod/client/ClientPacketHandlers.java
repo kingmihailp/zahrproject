@@ -56,4 +56,8 @@ public class ClientPacketHandlers {
     public static void handleRandomTexture(boolean active) {
         RandomTextureHandler.setActive(active);
     }
+
+    public static void handleBigHead(boolean active) {
+        BigHeadRenderHandler.setActive(active);
+    }
 }

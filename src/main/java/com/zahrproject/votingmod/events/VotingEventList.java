@@ -1,6 +1,8 @@
 package com.zahrproject.votingmod.events;
 
 import com.zahrproject.votingmod.VotingManager;
+import com.zahrproject.votingmod.handler.BadTimeHandler;
+import com.zahrproject.votingmod.handler.BigHeadTracker;
 import com.zahrproject.votingmod.handler.FlipModelTracker;
 import com.zahrproject.votingmod.handler.FlipScreenTracker;
 import com.zahrproject.votingmod.handler.InvertColorsTracker;
@@ -11,6 +13,7 @@ import com.zahrproject.votingmod.handler.AquamanHandler;
 import com.zahrproject.votingmod.handler.BomberHandler;
 import com.zahrproject.votingmod.handler.JebNamingData;
 import com.zahrproject.votingmod.handler.ScreetchHandler;
+import com.zahrproject.votingmod.network.BigHeadPacket;
 import com.zahrproject.votingmod.network.InvertColorsPacket;
 import com.zahrproject.votingmod.network.RandomTexturePacket;
 import com.zahrproject.votingmod.handler.GoldenPlayerHandler;
@@ -120,6 +123,13 @@ public class VotingEventList {
     private static final ScheduledExecutorService FLIP_MODEL_SCHEDULER =
             Executors.newSingleThreadScheduledExecutor(r -> {
                 Thread t = new Thread(r, "VotingMod-FlipModelRevert");
+                t.setDaemon(true);
+                return t;
+            });
+
+    private static final ScheduledExecutorService BIG_HEAD_SCHEDULER =
+            Executors.newSingleThreadScheduledExecutor(r -> {
+                Thread t = new Thread(r, "VotingMod-BigHeadRevert");
                 t.setDaemon(true);
                 return t;
             });
@@ -1533,6 +1543,53 @@ public class VotingEventList {
                     broadcast(server,
                             "Теперь все игроки могут назвать ЛЮБУЮ сущность биркой «_jeb» "
                                     + "— она начнёт переливаться всеми цветами радуги!");
+                }
+        ));
+
+        // ── Special: bed explosions toggle in all dimensions ──────────────────
+
+        events.add(new VotingEvent(
+                "Переключить ПлохоеВремя",
+                server -> {
+                    boolean nowActive = BadTimeHandler.toggle();
+                    if (nowActive) {
+                        broadcast(server, "ПлохоеВремя! Кровати теперь взрываются во всех измерениях!");
+                    } else {
+                        broadcast(server, "ПлохоеВремя отключено. Кровати снова работают нормально.");
+                    }
+                }
+        ));
+
+        // ── Special: big head mode for 10 minutes ─────────────────────────────
+
+        events.add(new VotingEvent(
+                "Режим большой головы",
+                server -> {
+                    long durationMs = 10L * 60 * 1000;
+                    BigHeadTracker.setActive(System.currentTimeMillis() + durationMs, durationMs);
+                    BigHeadPacket pktOn       = new BigHeadPacket(true);
+                    EventTimerPacket timerStart = new EventTimerPacket(
+                            BigHeadTracker.TIMER_NAME, durationMs, durationMs);
+                    for (ServerPlayer p : server.getPlayerList().getPlayers()) {
+                        ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), pktOn);
+                        ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), timerStart);
+                    }
+                    broadcast(server, "Режим большой головы! Головы игроков стали огромными на 10 минут!");
+                    BIG_HEAD_SCHEDULER.schedule(() -> {
+                        BigHeadTracker.clear();
+                        MinecraftServer srv = ServerLifecycleHooks.getCurrentServer();
+                        if (srv == null) return;
+                        srv.execute(() -> {
+                            BigHeadPacket pktOff    = new BigHeadPacket(false);
+                            EventTimerPacket timerEnd = new EventTimerPacket(
+                                    BigHeadTracker.TIMER_NAME, 0, 0);
+                            for (ServerPlayer p : srv.getPlayerList().getPlayers()) {
+                                ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), pktOff);
+                                ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), timerEnd);
+                            }
+                            broadcast(srv, "Режим большой головы закончился. Головы вернулись к нормальному размеру.");
+                        });
+                    }, durationMs, TimeUnit.MILLISECONDS);
                 }
         ));
 

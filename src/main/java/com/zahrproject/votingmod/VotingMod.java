@@ -8,6 +8,7 @@ import com.zahrproject.votingmod.client.ChildRenderHandler;
 import com.zahrproject.votingmod.client.EventTimerHud;
 import com.zahrproject.votingmod.client.GoldenOverlayLayer;
 import com.zahrproject.votingmod.client.LimeGlintHelper;
+import com.zahrproject.votingmod.client.BigHeadRenderHandler;
 import com.zahrproject.votingmod.client.InventoryLockClientHandler;
 import com.zahrproject.votingmod.client.InvertColorsHandler;
 import com.zahrproject.votingmod.client.RandomTextureHandler;
@@ -44,6 +45,8 @@ import com.zahrproject.votingmod.handler.BomberHandler;
 import com.zahrproject.votingmod.handler.TerraBladeHandler;
 import com.zahrproject.votingmod.handler.ScreetchHandler;
 import com.zahrproject.votingmod.handler.XShotHandler;
+import com.zahrproject.votingmod.handler.BadTimeHandler;
+import com.zahrproject.votingmod.handler.BigHeadTracker;
 import com.zahrproject.votingmod.handler.JebNamingHandler;
 import com.zahrproject.votingmod.network.ModNetwork;
 import com.zahrproject.votingmod.recipe.ModRecipes;
@@ -102,6 +105,8 @@ public class VotingMod {
         MinecraftForge.EVENT_BUS.register(TerraBladeHandler.class);
         MinecraftForge.EVENT_BUS.register(BomberHandler.class);
         MinecraftForge.EVENT_BUS.register(new JebNamingHandler());
+        MinecraftForge.EVENT_BUS.register(BadTimeHandler.class);
+        MinecraftForge.EVENT_BUS.register(new BigHeadTracker());
         LOGGER.info("[VotingMod] Mod initialized!");
     }
 
@@ -121,6 +126,7 @@ public class VotingMod {
             MinecraftForge.EVENT_BUS.register(InvertColorsHandler.class);
             MinecraftForge.EVENT_BUS.register(RandomTextureHandler.class);
             MinecraftForge.EVENT_BUS.register(VoteResultOverlay.class);
+            MinecraftForge.EVENT_BUS.register(BigHeadRenderHandler.class);
 
             // Register the lime glint texture used by the Terra Blade enchantment
             LimeGlintHelper.registerTexture();

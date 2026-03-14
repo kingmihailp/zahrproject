@@ -98,5 +98,12 @@ public class ModNetwork {
                 TerraBladeWavePacket::encode,
                 TerraBladeWavePacket::decode,
                 TerraBladeWavePacket::handle);
+
+        // S2C: Server tells each client to enable or disable the big-head rendering
+        CHANNEL.registerMessage(id++,
+                BigHeadPacket.class,
+                BigHeadPacket::encode,
+                BigHeadPacket::decode,
+                BigHeadPacket::handle);
     }
 }
