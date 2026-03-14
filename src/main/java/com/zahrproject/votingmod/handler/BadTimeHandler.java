@@ -54,7 +54,7 @@ public class BadTimeHandler {
         if (level.isClientSide()) return;
 
         // Cancel the sleep attempt
-        event.setResult(Player.SleepResult.OTHER_PROBLEM);
+        event.setResult(Player.BedSleepingProblem.OTHER_PROBLEM);
 
         // pos is the HEAD block (BedBlock.use() normalises before firing the event)
         BlockPos pos = event.getPos();
