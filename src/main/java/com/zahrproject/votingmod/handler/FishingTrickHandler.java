@@ -6,7 +6,6 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.projectile.FishingHook;
-import com.zahrproject.votingmod.mixin.FishingHookAccessor;
 import net.minecraftforge.event.entity.EntityJoinLevelEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -76,8 +75,8 @@ public class FishingTrickHandler {
         if (event.getLevel().isClientSide()) return;
         if (!(event.getEntity() instanceof FishingHook hook)) return;
 
-        ((FishingHookAccessor) hook).setTimeUntilLured(1);
-        ((FishingHookAccessor) hook).setLuck(30);
+        hook.timeUntilLured = 1;
+        hook.luck = 30;
     }
 
     @SubscribeEvent

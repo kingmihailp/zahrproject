@@ -1,6 +1,5 @@
 package com.zahrproject.votingmod.handler;
 
-import com.zahrproject.votingmod.mixin.CreeperAccessor;
 import com.zahrproject.votingmod.network.EventTimerPacket;
 import com.zahrproject.votingmod.network.ModNetwork;
 import net.minecraft.nbt.CompoundTag;
@@ -72,7 +71,7 @@ public class ChargedCreepersHandler {
         if (event.getLevel().isClientSide()) return;
         if (!(event.getEntity() instanceof Creeper creeper)) return;
 
-        creeper.getEntityData().set(CreeperAccessor.getDataIsPowered(), true);
+        creeper.getEntityData().set(Creeper.DATA_IS_POWERED, true);
     }
 
     @SubscribeEvent
