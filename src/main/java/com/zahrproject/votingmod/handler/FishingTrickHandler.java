@@ -8,7 +8,6 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.projectile.FishingHook;
 import net.minecraftforge.event.entity.EntityJoinLevelEvent;
 
-import java.lang.reflect.Field;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.network.PacketDistributor;
@@ -28,19 +27,6 @@ import java.util.concurrent.TimeUnit;
 public class FishingTrickHandler {
 
     public static final String TIMER_NAME = "Рыбацкая хитрость";
-
-    private static final Field FIELD_TIME_UNTIL_LURED;
-    private static final Field FIELD_LUCK;
-    static {
-        try {
-            FIELD_TIME_UNTIL_LURED = FishingHook.class.getDeclaredField("timeUntilLured");
-            FIELD_TIME_UNTIL_LURED.setAccessible(true);
-            FIELD_LUCK = FishingHook.class.getDeclaredField("luck");
-            FIELD_LUCK.setAccessible(true);
-        } catch (NoSuchFieldException e) {
-            throw new RuntimeException("Cannot find FishingHook fields", e);
-        }
-    }
 
     private static final String NBT_EXPIRY_KEY   = "votingmod_fishingtrick_expiry";
     private static final String NBT_DURATION_KEY = "votingmod_fishingtrick_duration";
@@ -90,12 +76,8 @@ public class FishingTrickHandler {
         if (event.getLevel().isClientSide()) return;
         if (!(event.getEntity() instanceof FishingHook hook)) return;
 
-        try {
-            FIELD_TIME_UNTIL_LURED.setInt(hook, 1);
-            FIELD_LUCK.setInt(hook, 30);
-        } catch (IllegalAccessException e) {
-            throw new RuntimeException("Cannot set FishingHook fields", e);
-        }
+        hook.timeUntilLured = 1;
+        hook.luck = 30;
     }
 
     @SubscribeEvent
