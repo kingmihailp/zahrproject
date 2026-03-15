@@ -7,7 +7,6 @@ import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.monster.Creeper;
-import net.minecraftforge.common.util.ObfuscationReflectionHelper;
 import net.minecraftforge.event.entity.EntityJoinLevelEvent;
 
 import java.lang.reflect.Field;
@@ -34,9 +33,10 @@ public class ChargedCreepersHandler {
     private static final EntityDataAccessor<Boolean> ACCESSOR_POWERED;
     static {
         try {
-            Field f = ObfuscationReflectionHelper.findField(Creeper.class, "DATA_IS_POWERED");
+            Field f = Creeper.class.getDeclaredField("DATA_IS_POWERED");
+            f.setAccessible(true);
             ACCESSOR_POWERED = (EntityDataAccessor<Boolean>) f.get(null);
-        } catch (IllegalAccessException e) {
+        } catch (NoSuchFieldException | IllegalAccessException e) {
             throw new RuntimeException("Cannot read Creeper.DATA_IS_POWERED", e);
         }
     }
