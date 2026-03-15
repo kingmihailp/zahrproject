@@ -3,10 +3,14 @@ package com.zahrproject.votingmod.handler;
 import com.zahrproject.votingmod.network.EventTimerPacket;
 import com.zahrproject.votingmod.network.ModNetwork;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.monster.Creeper;
+import net.minecraftforge.common.util.ObfuscationReflectionHelper;
 import net.minecraftforge.event.entity.EntityJoinLevelEvent;
+
+import java.lang.reflect.Field;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.network.PacketDistributor;
@@ -25,6 +29,17 @@ import java.util.concurrent.TimeUnit;
 public class ChargedCreepersHandler {
 
     public static final String TIMER_NAME = "Взрывные характеры";
+
+    @SuppressWarnings("unchecked")
+    private static final EntityDataAccessor<Boolean> ACCESSOR_POWERED;
+    static {
+        try {
+            Field f = ObfuscationReflectionHelper.findField(Creeper.class, "DATA_IS_POWERED");
+            ACCESSOR_POWERED = (EntityDataAccessor<Boolean>) f.get(null);
+        } catch (IllegalAccessException e) {
+            throw new RuntimeException("Cannot read Creeper.DATA_IS_POWERED", e);
+        }
+    }
 
     private static final String NBT_EXPIRY_KEY   = "votingmod_chargedcreepers_expiry";
     private static final String NBT_DURATION_KEY = "votingmod_chargedcreepers_duration";
@@ -71,7 +86,7 @@ public class ChargedCreepersHandler {
         if (event.getLevel().isClientSide()) return;
         if (!(event.getEntity() instanceof Creeper creeper)) return;
 
-        creeper.getEntityData().set(Creeper.DATA_IS_POWERED, true);
+        creeper.getEntityData().set(ACCESSOR_POWERED, true);
     }
 
     @SubscribeEvent
