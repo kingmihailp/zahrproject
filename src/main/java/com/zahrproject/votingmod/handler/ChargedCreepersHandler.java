@@ -71,7 +71,11 @@ public class ChargedCreepersHandler {
         if (event.getLevel().isClientSide()) return;
         if (!(event.getEntity() instanceof Creeper creeper)) return;
 
-        creeper.getEntityData().set(Creeper.DATA_IS_POWERED, true);
+        // DATA_IS_POWERED is private; use NBT round-trip to set powered state without AT or reflection.
+        CompoundTag nbt = new CompoundTag();
+        creeper.addAdditionalSaveData(nbt);
+        nbt.putBoolean("powered", true);
+        creeper.readAdditionalSaveData(nbt);
     }
 
     @SubscribeEvent
