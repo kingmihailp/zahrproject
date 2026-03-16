@@ -10,6 +10,7 @@ import com.zahrproject.votingmod.handler.RandomTextureTracker;
 import com.zahrproject.votingmod.handler.BloodMoonHandler;
 import com.zahrproject.votingmod.handler.MobEffectsHandler;
 import com.zahrproject.votingmod.handler.AquamanHandler;
+import com.zahrproject.votingmod.handler.ChickenLootHandler;
 import com.zahrproject.votingmod.handler.ChargedCreepersHandler;
 import com.zahrproject.votingmod.handler.BomberHandler;
 import com.zahrproject.votingmod.handler.JebNamingData;
@@ -1603,6 +1604,17 @@ public class VotingEventList {
                             broadcast(srv, "Режим большой головы закончился. Головы вернулись к нормальному размеру.");
                         });
                     }, durationMs, TimeUnit.MILLISECONDS);
+                }
+        ));
+
+        // ── Special: chicken loot — chickens lay random forge registry items ─────
+
+        events.add(new VotingEvent(
+                "Куриное богатство",
+                server -> {
+                    long duration = ChickenLootHandler.DURATION_MS;
+                    ChickenLootHandler.activate(server, duration);
+                    broadcast(server, "Куриное богатство! Все куры в мире несут случайные предметы из реестра 10 минут!");
                 }
         ));
 

@@ -40,6 +40,7 @@ import com.zahrproject.votingmod.handler.SkateboardHandler;
 import com.zahrproject.votingmod.handler.SuperPickaxeHandler;
 import com.zahrproject.votingmod.handler.MShotHandler;
 import com.zahrproject.votingmod.handler.AquamanHandler;
+import com.zahrproject.votingmod.handler.ChickenLootHandler;
 import com.zahrproject.votingmod.handler.ChargedCreepersHandler;
 import com.zahrproject.votingmod.handler.BladeEnchantmentsHandler;
 import com.zahrproject.votingmod.handler.BomberHandler;
@@ -102,6 +103,7 @@ public class VotingMod {
         MinecraftForge.EVENT_BUS.register(AntiGravityHandler.class);
         MinecraftForge.EVENT_BUS.register(ScreetchHandler.class);
         MinecraftForge.EVENT_BUS.register(AquamanHandler.class);
+        MinecraftForge.EVENT_BUS.register(ChickenLootHandler.class);
         MinecraftForge.EVENT_BUS.register(ChargedCreepersHandler.class);
         MinecraftForge.EVENT_BUS.register(BladeEnchantmentsHandler.class);
         MinecraftForge.EVENT_BUS.register(TerraBladeHandler.class);

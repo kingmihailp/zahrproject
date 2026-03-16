@@ -165,7 +165,8 @@ public class EventTimerHud {
         if (name.contains("Голова"))     return 0xFFCC55FF; // Голова вниз          → purple
         if (name.contains("хардкор"))    return 0xFF800020; // Истинный хардкор     → dark burgundy
         if (name.contains("аквамен"))    return 0xFF4488FF; // Аквамен              → blue
-        if (name.contains("хитрость"))  return 0xFF20B2AA; // Рыбацкая хитрость   → teal
+        if (name.contains("хитрость"))   return 0xFF20B2AA; // Рыбацкая хитрость   → teal
+        if (name.contains("богатство"))  return 0xFFFF8C00; // Куриное богатство   → orange
         if (isMobEffectsEvent(name))  return animatedBRGColor();      // animated blue-red-green
         return 0xFF88FF88;                                 // fallback              → green
     }
