@@ -5,10 +5,8 @@ import com.zahrproject.votingmod.network.ModNetwork;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
-import com.zahrproject.votingmod.mixin.FishingHookAccessor;
-import net.minecraft.world.entity.projectile.FishingHook;
-import net.minecraftforge.event.entity.EntityJoinLevelEvent;
-
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.network.PacketDistributor;
@@ -21,8 +19,10 @@ import java.util.concurrent.TimeUnit;
 /**
  * Manages the "Рыбацкая хитрость" event:
  *
- *   • Fishing hook bites almost instantly (timeUntilLured = 1 tick).
- *   • Fishing luck is set to an extreme value (+30), giving near-guaranteed treasure.
+ *   • Fishing hook bites almost instantly — handled by FishingHookMixin
+ *     which shadows timeUntilLured and forces it to 1 every tick.
+ *   • Fishing luck is set to an extreme value via the vanilla Luck mob effect
+ *     (amplifier 29 = level 30), giving near-guaranteed treasure.
  *   • Duration: 6 minutes. Timer survives server restarts and reconnects via NBT.
  */
 public class FishingTrickHandler {
@@ -31,6 +31,9 @@ public class FishingTrickHandler {
 
     private static final String NBT_EXPIRY_KEY   = "votingmod_fishingtrick_expiry";
     private static final String NBT_DURATION_KEY = "votingmod_fishingtrick_duration";
+
+    /** Luck amplifier to apply (amplifier 29 = Luck level 30). */
+    private static final int LUCK_AMPLIFIER = 29;
 
     private static final ScheduledExecutorService SCHEDULER =
             Executors.newSingleThreadScheduledExecutor(r -> {
@@ -52,10 +55,12 @@ public class FishingTrickHandler {
         durationMs = duration;
         expiryMs   = System.currentTimeMillis() + duration;
 
+        int durationTicks = (int)(duration / 50);
         for (ServerPlayer p : server.getPlayerList().getPlayers()) {
             CompoundTag tag = p.getPersistentData();
             tag.putLong(NBT_EXPIRY_KEY,   expiryMs);
             tag.putLong(NBT_DURATION_KEY, durationMs);
+            p.addEffect(new MobEffectInstance(MobEffects.LUCK, durationTicks, LUCK_AMPLIFIER, false, true));
         }
 
         EventTimerPacket timerPacket = new EventTimerPacket(TIMER_NAME, duration, duration);
@@ -66,22 +71,6 @@ public class FishingTrickHandler {
     }
 
     // ── Forge Events ──────────────────────────────────────────────────────────
-
-    /**
-     * When a fishing hook joins the world while the event is active, override its
-     * wait time to 1 tick (nearly instant bite) and set luck to 30 (1000%+ boost).
-     */
-    @SubscribeEvent
-    public static void onEntityJoinLevel(EntityJoinLevelEvent event) {
-        if (!isActive()) return;
-        if (event.getLevel().isClientSide()) return;
-        if (!(event.getEntity() instanceof FishingHook hook)) return;
-
-        // timeUntilLured and luck are private; access them via Mixin accessor.
-        FishingHookAccessor accessor = (FishingHookAccessor) hook;
-        accessor.setTimeUntilLured(1);
-        accessor.setLuck(30);
-    }
 
     @SubscribeEvent
     public static void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event) {
@@ -101,6 +90,7 @@ public class FishingTrickHandler {
         if (remaining <= 0) {
             tag.remove(NBT_EXPIRY_KEY);
             tag.remove(NBT_DURATION_KEY);
+            player.removeEffect(MobEffects.LUCK);
             ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
                     new EventTimerPacket(TIMER_NAME, 0, 0));
             return;
@@ -111,6 +101,9 @@ public class FishingTrickHandler {
             durationMs = savedDuration;
             scheduleRevert(remaining);
         }
+
+        // Re-apply Luck effect in case it was lost or has wrong duration.
+        player.addEffect(new MobEffectInstance(MobEffects.LUCK, (int)(remaining / 50), LUCK_AMPLIFIER, false, true));
 
         ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
                 new EventTimerPacket(TIMER_NAME, remaining, savedDuration));
@@ -141,6 +134,7 @@ public class FishingTrickHandler {
                     CompoundTag tag = p.getPersistentData();
                     tag.remove(NBT_EXPIRY_KEY);
                     tag.remove(NBT_DURATION_KEY);
+                    p.removeEffect(MobEffects.LUCK);
                     ModNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> p),
                             new EventTimerPacket(TIMER_NAME, 0, 0));
                 }
