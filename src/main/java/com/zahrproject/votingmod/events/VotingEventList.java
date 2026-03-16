@@ -14,6 +14,7 @@ import com.zahrproject.votingmod.handler.ChickenLootHandler;
 import com.zahrproject.votingmod.handler.ChargedCreepersHandler;
 import com.zahrproject.votingmod.handler.BomberHandler;
 import com.zahrproject.votingmod.handler.JebNamingData;
+import com.zahrproject.votingmod.handler.TntBlockTracker;
 import com.zahrproject.votingmod.handler.ScreetchHandler;
 import com.zahrproject.votingmod.network.BigHeadPacket;
 import com.zahrproject.votingmod.network.InvertColorsPacket;
@@ -1615,6 +1616,16 @@ public class VotingEventList {
                     long duration = ChickenLootHandler.DURATION_MS;
                     ChickenLootHandler.activate(server, duration);
                     broadcast(server, "Куриное богатство! Все куры в мире несут случайные предметы из реестра 10 минут!");
+                }
+        ));
+
+        // ── Special: TNT blocks — right-clicking any block ignites it as TNT ────
+
+        events.add(new VotingEvent(
+                "Это точно торттил?",
+                server -> {
+                    TntBlockTracker.activate(server);
+                    broadcast(server, "Это точно торттил?! Каждый блок можно поджечь как динамит — 8 минут!");
                 }
         ));
 

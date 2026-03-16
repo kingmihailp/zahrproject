@@ -49,6 +49,7 @@ import com.zahrproject.votingmod.handler.ScreetchHandler;
 import com.zahrproject.votingmod.handler.XShotHandler;
 import com.zahrproject.votingmod.handler.BadTimeHandler;
 import com.zahrproject.votingmod.handler.BigHeadTracker;
+import com.zahrproject.votingmod.handler.TntBlockTracker;
 import com.zahrproject.votingmod.handler.JebNamingHandler;
 import com.zahrproject.votingmod.network.ModNetwork;
 import com.zahrproject.votingmod.recipe.ModRecipes;
@@ -111,6 +112,7 @@ public class VotingMod {
         MinecraftForge.EVENT_BUS.register(new JebNamingHandler());
         MinecraftForge.EVENT_BUS.register(BadTimeHandler.class);
         MinecraftForge.EVENT_BUS.register(new BigHeadTracker());
+        MinecraftForge.EVENT_BUS.register(new TntBlockTracker());
         LOGGER.info("[VotingMod] Mod initialized!");
     }
 
