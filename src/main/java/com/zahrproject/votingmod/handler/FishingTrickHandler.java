@@ -7,7 +7,6 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
-import com.zahrproject.votingmod.mixin.FishingHookAccessor;
 import net.minecraft.world.entity.projectile.FishingHook;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
@@ -81,11 +80,8 @@ public class FishingTrickHandler {
         if (event.player.level().isClientSide()) return;
         if (!isActive()) return;
         FishingHook hook = event.player.fishing;
-        if (hook != null) {
-            FishingHookAccessor accessor = (FishingHookAccessor) hook;
-            if (accessor.getTimeUntilLured() > 1) {
-                accessor.setTimeUntilLured(1);
-            }
+        if (hook != null && hook.timeUntilLured > 1) {
+            hook.timeUntilLured = 1;
         }
     }
 
