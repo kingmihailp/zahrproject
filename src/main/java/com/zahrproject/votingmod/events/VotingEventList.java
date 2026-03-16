@@ -10,7 +10,6 @@ import com.zahrproject.votingmod.handler.RandomTextureTracker;
 import com.zahrproject.votingmod.handler.BloodMoonHandler;
 import com.zahrproject.votingmod.handler.MobEffectsHandler;
 import com.zahrproject.votingmod.handler.AquamanHandler;
-import com.zahrproject.votingmod.handler.FishingTrickHandler;
 import com.zahrproject.votingmod.handler.ChargedCreepersHandler;
 import com.zahrproject.votingmod.handler.BomberHandler;
 import com.zahrproject.votingmod.handler.JebNamingData;
@@ -1451,16 +1450,6 @@ public class VotingEventList {
                 }
         ));
 
-        // ── Special: fishing trick — instant bite + maximum luck ──────────────
-
-        events.add(new VotingEvent(
-                "Рыбацкая хитрость",
-                server -> {
-                    long duration = 6 * 60 * 1000L;
-                    FishingTrickHandler.activate(server, duration);
-                    broadcast(server, "Рыбацкая хитрость! Рыба клюёт мгновенно, удача рыбака зашкаливает — 6 минут!");
-                }
-        ));
 
         // ── Special: all creepers spawn charged ───────────────────────────────
 
