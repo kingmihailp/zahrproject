@@ -105,5 +105,12 @@ public class ModNetwork {
                 BigHeadPacket::encode,
                 BigHeadPacket::decode,
                 BigHeadPacket::handle);
+
+        // S2C: Server tells clients to start a blinking TNT overlay on a specific block
+        CHANNEL.registerMessage(id++,
+                PrimedBlockPacket.class,
+                PrimedBlockPacket::encode,
+                PrimedBlockPacket::decode,
+                PrimedBlockPacket::handle);
     }
 }

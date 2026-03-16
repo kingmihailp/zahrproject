@@ -2,6 +2,7 @@ package com.zahrproject.votingmod.client;
 
 import com.zahrproject.votingmod.events.ChildEventManager;
 import net.minecraft.client.Minecraft;
+import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.player.Player;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
@@ -59,5 +60,9 @@ public class ClientPacketHandlers {
 
     public static void handleBigHead(boolean active) {
         BigHeadRenderHandler.setActive(active);
+    }
+
+    public static void handlePrimedBlock(BlockPos pos, long fuseMs) {
+        PrimedBlockRenderer.addPrimed(pos, fuseMs);
     }
 }

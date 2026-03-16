@@ -9,6 +9,7 @@ import com.zahrproject.votingmod.client.EventTimerHud;
 import com.zahrproject.votingmod.client.GoldenOverlayLayer;
 import com.zahrproject.votingmod.client.LimeGlintHelper;
 import com.zahrproject.votingmod.client.BigHeadRenderHandler;
+import com.zahrproject.votingmod.client.PrimedBlockRenderer;
 import com.zahrproject.votingmod.client.InventoryLockClientHandler;
 import com.zahrproject.votingmod.client.InvertColorsHandler;
 import com.zahrproject.votingmod.client.RandomTextureHandler;
@@ -133,6 +134,7 @@ public class VotingMod {
             MinecraftForge.EVENT_BUS.register(RandomTextureHandler.class);
             MinecraftForge.EVENT_BUS.register(VoteResultOverlay.class);
             MinecraftForge.EVENT_BUS.register(BigHeadRenderHandler.class);
+            MinecraftForge.EVENT_BUS.register(PrimedBlockRenderer.class);
 
             // Register the lime glint texture used by the Terra Blade enchantment
             LimeGlintHelper.registerTexture();
