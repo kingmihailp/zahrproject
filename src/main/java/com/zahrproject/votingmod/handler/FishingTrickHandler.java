@@ -7,8 +7,6 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
-import net.minecraft.world.entity.projectile.FishingHook;
-import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.network.PacketDistributor;
@@ -73,17 +71,6 @@ public class FishingTrickHandler {
     }
 
     // ── Forge Events ──────────────────────────────────────────────────────────
-
-    @SubscribeEvent
-    public static void onPlayerTick(TickEvent.PlayerTickEvent event) {
-        if (event.phase != TickEvent.Phase.END) return;
-        if (event.player.level().isClientSide()) return;
-        if (!isActive()) return;
-        FishingHook hook = event.player.fishing;
-        if (hook != null && hook.timeUntilLured > 1) {
-            hook.timeUntilLured = 1;
-        }
-    }
 
     @SubscribeEvent
     public static void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event) {

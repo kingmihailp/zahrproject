@@ -5,6 +5,7 @@
   "compatibilityLevel": "JAVA_17",
   "refmap": "votingmod.refmap.json",
   "mixins": [
+    "FishingHookMixin"
   ],
   "client": [
     "ItemRendererMixin",
