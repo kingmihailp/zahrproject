@@ -20,7 +20,7 @@ public class FishingHookMixin {
 
     @Shadow private int timeUntilLured;
 
-    @Inject(method = "tick", at = @At("HEAD"))
+    @Inject(method = "tick()V", at = @At("HEAD"))
     private void onTick(CallbackInfo ci) {
         FishingHook self = (FishingHook)(Object)this;
         if (!self.level().isClientSide() && FishingTrickHandler.isActive()) {
