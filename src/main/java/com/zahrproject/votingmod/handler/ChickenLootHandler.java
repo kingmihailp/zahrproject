@@ -93,7 +93,9 @@ public class ChickenLootHandler {
         if (!(event.getEntity() instanceof ItemEntity itemEntity)) return;
         if (itemEntity.getItem().getItem() != Items.EGG) return;
         // Player-thrown/dropped eggs have a thrower UUID; chicken-laid eggs do not
-        if (itemEntity.getThrower() != null) return;
+        CompoundTag throwerCheck = new CompoundTag();
+        itemEntity.saveWithoutId(throwerCheck);
+        if (throwerCheck.hasUUID("Thrower")) return;
 
         // Confirm a chicken is nearby (eggs spawn at the chicken's position)
         var pos      = itemEntity.position();
