@@ -11,7 +11,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(FishingHook.class)
 public abstract class FishingHookMixin {
 
-    @Shadow
+    @Shadow(remap = false)
     private int timeUntilLured;
 
     @Inject(method = "tick", at = @At("TAIL"), remap = false)
